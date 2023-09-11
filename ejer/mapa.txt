@@ -1,0 +1,35 @@
+1)
+a) Se encuentra en src/lang 
+b) Que uno guarda el tipo el tipo del termino
+2) Un comentario se agrega con #
+en parse -> langDef se puede cambiar commentLine para cambiar # a otro string
+y se puede agregar commentStart y commentEnd para usar comentarios multilinea
+3) Porque Left <$> decl puede fallar y necesitamos la declaracion entera
+try devuelve lo que se le ingreso al siguiente lado del <|>
+puede no encontrarse un let
+4) Tenemos que ver si la variable es Global o es un nombre local
+En env llevamos la lista de nombres locales.
+En la abstraccion, en el fix y en el let-in se guardan los nombres locales
+Luego cuando se encuentra una variable dependiendo
+5) las superclases de MonadFD4 son: MonadIO MonadState MonadError y MonadReader
+Las mónadas @m@ de esta clase cuentan con las operaciones:
+   - @ask :: m Conf@
+   - @get :: m GlEnv@
+   - @put :: GlEnv -> m ()@
+   - @throwError :: Error -> m a@
+   - @catchError :: m a -> (Error -> m a) -> m a@
+   - @liftIO :: IO a -> m a@
+
+y otras operaciones derivadas de ellas, como por ejemplo
+   - @modify :: (GlEnv -> GlEnv) -> m ()@
+   - @gets :: (GlEnv -> a) -> m a@
+6) Porque el termino puede no estar LC
+7)
+pp: Pretty printing de términos (String)
+ppTy: Pretty printer para tipos (String)
+ppName: Pretty printer de nombres (String)
+ppDecl: Pretty printing de declaraciones
+8) Elige un candidato entre el nombre que ya tenia y el menor numero que no este usado
+9) Se debe modificar el Tm, el STm y todas las funciones que usen estos tipos
+10) Se agrega un tipo donde info tiene los datos de los tiempos
+11) 
