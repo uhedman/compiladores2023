@@ -34,6 +34,8 @@ data STm info ty var =
   | SFix info (var, ty) (var, ty) (STm info ty var)
   | SIfZ info (STm info ty var) (STm info ty var) (STm info ty var)
   | SLet info (var, ty) (STm info ty var) (STm info ty var)
+  -- | SLet Bool info [(var, ty)] (var, ty) (STm info ty var) (STm info ty var)
+  --   Let  Rec  info argBinders  x : T     t             in  t
   deriving (Show, Functor)
 
 -- | AST de Tipos
@@ -45,6 +47,22 @@ data Ty =
 type Name = String
 
 type STerm = STm Pos Ty Name -- ^ 'STm' tiene 'Name's como variables ligadas y libres y globales, guarda posición  
+
+{-
+type STerm = STm Pos STy Name  
+
+data STy = Normal Ty | TSinonimo Name Ty deriving Show
+
+data SDecl a = DSinonimo Name Ty | SDecl
+  { sdeclPos  :: Pos
+  , sdeclName :: Name
+  , sdeclBody :: a
+  , sdeclRec  :: Bool
+  , sdeclArgs :: [STerm]
+  , sdeclType :: [STy]
+  }
+  deriving (Show, Functor)
+-}
 
 newtype Const = CNat Int
   deriving Show
