@@ -132,10 +132,10 @@ binding = do v <- var
 lam :: P STerm
 lam = do i <- getPos
          reserved "fun"
-         (v,ty) <- parens binding
+         binds <- many (parens binding)
          reservedOp "->"
          t <- expr
-         return (SLam i (v,ty) t)
+         return (SLam i binds t)
 
 -- Nota el parser app también parsea un solo atom.
 app :: P STerm
