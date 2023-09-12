@@ -159,13 +159,16 @@ fix = do i <- getPos
          reserved "fix"
          (f, fty) <- parens binding
          (x, xty) <- parens binding
+         binds <- many (parens binding) <|> return []
          reservedOp "->"
          t <- expr
-         return (SFix i (f,fty) (x,xty) t)
+         return (SFix i (f,fty) (x,xty) binds t)
 
 temp :: P [([Char], STy)]
 temp = return []
 
+-- falta let f (x : T) : T' = t in t' =def let f : T -> T' = fun (x : T) -> t in t'
+-- cambiar el tipo de SLet?
 letexp :: P STerm
 letexp = do
   i <- getPos
