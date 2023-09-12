@@ -81,16 +81,18 @@ getPos :: P Pos
 getPos = do pos <- getPosition
             return $ Pos (sourceLine pos) (sourceColumn pos)
 
-tyatom :: P Ty
-tyatom = (reserved "Nat" >> return NatTy)
+tyatom :: P STy
+tyatom = (reserved "Nat" >> return (Normal NatTy))
+         <|> do v <-var 
+                return (Sin v)
          <|> parens typeP
 
-typeP :: P Ty
+typeP :: P STy
 typeP = try (do 
           x <- tyatom
           reservedOp "->"
           y <- typeP
-          return (FunTy x y))
+          return (SFun x y))
       <|> tyatom
           
 const :: P Const
@@ -121,7 +123,7 @@ atom =     (flip SConst <$> const <*> getPos)
        <|> printOp
 
 -- parsea un par (variable : tipo)
-binding :: P (Name, Ty)
+binding :: P (Name, STy)
 binding = do v <- var
              reservedOp ":"
              ty <- typeP
@@ -161,16 +163,21 @@ fix = do i <- getPos
          t <- expr
          return (SFix i (f,fty) (x,xty) t)
 
+temp :: P [([Char], STy)]
+temp = return []
+
 letexp :: P STerm
 letexp = do
   i <- getPos
   reserved "let"
-  (v,ty) <- parens binding
+  recBool <- (reserved "rec" >> return True) <|> return False
+  args <- temp
+  (v,ty) <- binding <|> parens binding
   reservedOp "="  
   def <- expr
   reserved "in"
   body <- expr
-  return (SLet i (v,ty) def body)
+  return (SLet recBool i args (v,ty) def body)
 
 -- | Parser de términos
 tm :: P STerm
