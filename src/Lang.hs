@@ -53,7 +53,7 @@ data STy =
     | Sin Name deriving Show
 
 data SDecl a = 
-    DSinonimo Name Ty 
+    DSyn Name STy 
   | SDeclFun { sdeclPos  :: Pos
              , sdeclRec  :: Bool
              , sdeclName :: Name

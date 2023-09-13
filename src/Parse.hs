@@ -196,19 +196,28 @@ tm = app <|> lam <|> ifz <|> printOp <|> fix <|> letexp
 decl :: P (SDecl STerm)
 decl = do 
   i <- getPos
-  reserved "let"
-  try (do recBool <- (reserved "rec" >> return True) <|> return False
-          v <- var
-          args <- many1 (parens binding)
-          reservedOp ":"
-          ty <- typeP
-          reservedOp "="  
-          def <- expr
-          return (SDeclFun i recBool v args ty def))
-      <|> (do (v,ty) <- binding <|> parens binding
-              reservedOp "="  
-              def <- expr
-              return (SDeclVar i v ty def))
+  try (do 
+    reserved "type"
+    v <- var
+    reservedOp "="
+    ty <- typeP
+    return (DSyn v ty))
+      <|> (do 
+          reserved "let"
+          try (do 
+            recBool <- (reserved "rec" >> return True) <|> return False
+            v <- var
+            args <- many1 (parens binding)
+            reservedOp ":"
+            ty <- typeP
+            reservedOp "="  
+            def <- expr
+            return (SDeclFun i recBool v args ty def))
+              <|> (do 
+                (v,ty) <- binding <|> parens binding
+                reservedOp "="  
+                def <- expr
+                return (SDeclVar i v ty def)))
 
 -- | Parser de programas (listas de declaraciones) 
 program :: P [SDecl STerm]
@@ -224,7 +233,7 @@ runP :: P a -> String -> String -> Either ParseError a
 runP p s filename = runParser (whiteSpace *> p <* eof) () filename s
 
 --para debugging en uso interactivo (ghci)
-parse :: String -> STerm
-parse s = case runP expr s "" of
+parse :: String -> SDecl STerm
+parse s = case runP decl s "" of
             Right t -> t
             Left e -> error ("no parse: " ++ show s)
