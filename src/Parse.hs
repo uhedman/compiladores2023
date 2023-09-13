@@ -167,15 +167,15 @@ fix = do i <- getPos
 temp :: P [([Char], STy)]
 temp = return []
 
--- falta let f (x : T) : T' = t in t' =def let f : T -> T' = fun (x : T) -> t in t'
--- cambiar el tipo de SLet?
 letexp :: P STerm
 letexp = do
   i <- getPos
   reserved "let"
   try (do recBool <- (reserved "rec" >> return True) <|> return False
-          args <- temp
-          (v,ty) <- binding <|> parens binding
+          v <- var
+          args <- many (parens binding)
+          reservedOp ":"
+          ty <- typeP
           reservedOp "="  
           def <- expr
           reserved "in"
