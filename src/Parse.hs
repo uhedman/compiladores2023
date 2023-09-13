@@ -173,7 +173,7 @@ letexp = do
   reserved "let"
   try (do recBool <- (reserved "rec" >> return True) <|> return False
           v <- var
-          args <- many (parens binding)
+          args <- many1 (parens binding)
           reservedOp ":"
           ty <- typeP
           reservedOp "="  
