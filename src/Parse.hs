@@ -173,14 +173,20 @@ letexp :: P STerm
 letexp = do
   i <- getPos
   reserved "let"
-  recBool <- (reserved "rec" >> return True) <|> return False
-  args <- temp
-  (v,ty) <- binding <|> parens binding
-  reservedOp "="  
-  def <- expr
-  reserved "in"
-  body <- expr
-  return (SLet recBool i args (v,ty) def body)
+  try (do recBool <- (reserved "rec" >> return True) <|> return False
+          args <- temp
+          (v,ty) <- binding <|> parens binding
+          reservedOp "="  
+          def <- expr
+          reserved "in"
+          body <- expr
+          return (SLetLam recBool i args (v,ty) def body))
+      <|> (do (v,ty) <- binding <|> parens binding
+              reservedOp "="  
+              def <- expr
+              reserved "in"
+              body <- expr
+              return(SLetVar i (v, ty) def body))
 
 -- | Parser de términos
 tm :: P STerm
