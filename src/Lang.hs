@@ -52,15 +52,18 @@ data STy =
     | SFun STy STy 
     | Sin Name deriving Show
 
-data SDecl a = DSinonimo Name Ty | SDecl
-  { sdeclPos  :: Pos
-  , sdeclName :: Name
-  , sdeclBody :: a
-  , sdeclRec  :: Bool
-  , sdeclArgs :: [STerm]
-  , sdeclType :: [STy]
-  }
-  deriving (Show, Functor)
+data SDecl a = 
+    DSinonimo Name Ty 
+  | SDeclFun { sdeclPos  :: Pos
+             , sdeclRec  :: Bool
+             , sdeclName :: Name
+             , sdeclArgs :: [(Name, STy)]
+             , sdeclType :: STy
+             , sdeclBody :: a}
+  | SDeclVar { sdeclPos  :: Pos
+             , sdeclName :: Name
+             , sdeclType :: STy
+             , sdeclBody :: a} deriving (Show, Functor)
 
 newtype Const = CNat Int
   deriving Show
