@@ -180,13 +180,13 @@ letexp = do
           def <- expr
           reserved "in"
           body <- expr
-          return (SLetLam recBool i args (v,ty) def body))
+          return (SLetLam i recBool args (v,ty) def body))
       <|> (do (v,ty) <- binding <|> parens binding
               reservedOp "="  
               def <- expr
               reserved "in"
               body <- expr
-              return(SLetVar i (v, ty) def body))
+              return (SLetVar i (v, ty) def body))
 
 -- | Parser de términos
 tm :: P STerm
