@@ -84,7 +84,7 @@ getPos = do pos <- getPosition
 tyatom :: P STy
 tyatom = (reserved "Nat" >> return (Normal NatTy))
          <|> do v <-var 
-                return (Sin v)
+                return (Syn v)
          <|> parens typeP
 
 typeP :: P STy

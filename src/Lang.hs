@@ -50,7 +50,7 @@ type STerm = STm Pos STy Name -- ^ 'STm' tiene 'Name's como variables ligadas y 
 data STy = 
       Normal Ty 
     | SFun STy STy 
-    | Sin Name deriving Show
+    | Syn Name deriving Show
 
 data SDecl a = 
     DSyn Name STy 
