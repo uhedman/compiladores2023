@@ -136,7 +136,7 @@ spreadBinds = concatMap f
 lam :: P STerm
 lam = do i <- getPos
          reserved "fun"
-         binds <- many (parens binding)
+         binds <- many1 (parens binding)
          reservedOp "->"
          t <- expr
          return (SLam i (spreadBinds binds) t)
@@ -237,7 +237,7 @@ runP :: P a -> String -> String -> Either ParseError a
 runP p s filename = runParser (whiteSpace *> p <* eof) () filename s
 
 --para debugging en uso interactivo (ghci)
-parse :: String -> SDecl STerm
-parse s = case runP decl s "" of
+parse :: String -> STerm
+parse s = case runP expr s "" of
             Right t -> t
             Left e -> error ("no parse: " ++ show s)
