@@ -123,11 +123,15 @@ atom =     (flip SConst <$> const <*> getPos)
        <|> printOp
 
 -- parsea un par (variable : tipo)
-binding :: P (Name, STy)
-binding = do v <- var
+binding :: P ([Name], STy)
+binding = do vs <- many1 var
              reservedOp ":"
              ty <- typeP
-             return (v, ty)
+             return (vs, ty)
+
+aux :: [([Name], STy)] -> [(Name, STy)]
+aux = concatMap f
+  where f (vs, t) = map (\v -> (v, t)) vs
 
 lam :: P STerm
 lam = do i <- getPos
@@ -135,7 +139,7 @@ lam = do i <- getPos
          binds <- many (parens binding)
          reservedOp "->"
          t <- expr
-         return (SLam i binds t)
+         return (SLam i (aux binds) t)
 
 -- Nota el parser app también parsea un solo atom.
 app :: P STerm
@@ -157,12 +161,12 @@ ifz = do i <- getPos
 fix :: P STerm
 fix = do i <- getPos
          reserved "fix"
-         (f, fty) <- parens binding
-         (x, xty) <- parens binding
+         ([f], fty) <- parens binding
+         ([x], xty) <- parens binding
          binds <- many (parens binding) <|> return []
          reservedOp "->"
          t <- expr
-         return (SFix i (f,fty) (x,xty) binds t)
+         return (SFix i (f,fty) (x,xty) (aux binds) t)
 
 temp :: P [([Char], STy)]
 temp = return []
@@ -173,15 +177,15 @@ letexp = do
   reserved "let"
   try (do recBool <- (reserved "rec" >> return True) <|> return False
           v <- var
-          args <- many1 (parens binding)
+          binds <- many1 (parens binding)
           reservedOp ":"
           ty <- typeP
           reservedOp "="  
           def <- expr
           reserved "in"
           body <- expr
-          return (SLetLam i recBool args (v,ty) def body))
-      <|> (do (v,ty) <- binding <|> parens binding
+          return (SLetLam i recBool (aux binds) (v,ty) def body))
+      <|> (do ([v],ty) <- binding <|> parens binding
               reservedOp "="  
               def <- expr
               reserved "in"
@@ -207,14 +211,14 @@ decl = do
           try (do 
             recBool <- (reserved "rec" >> return True) <|> return False
             v <- var
-            args <- many1 (parens binding)
+            binds <- many1 (parens binding)
             reservedOp ":"
             ty <- typeP
             reservedOp "="  
             def <- expr
-            return (SDeclFun i recBool v args ty def))
+            return (SDeclFun i recBool v (aux binds) ty def))
               <|> (do 
-                (v,ty) <- binding <|> parens binding
+                ([v],ty) <- binding <|> parens binding
                 reservedOp "="  
                 def <- expr
                 return (SDeclVar i v ty def)))
