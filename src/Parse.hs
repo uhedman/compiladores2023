@@ -129,8 +129,8 @@ binding = do vs <- many1 var
              ty <- typeP
              return (vs, ty)
 
-aux :: [([Name], STy)] -> [(Name, STy)]
-aux = concatMap f
+spreadBinds :: [([Name], STy)] -> [(Name, STy)]
+spreadBinds = concatMap f
   where f (vs, t) = map (\v -> (v, t)) vs
 
 lam :: P STerm
@@ -139,7 +139,7 @@ lam = do i <- getPos
          binds <- many (parens binding)
          reservedOp "->"
          t <- expr
-         return (SLam i (aux binds) t)
+         return (SLam i (spreadBinds binds) t)
 
 -- Nota el parser app también parsea un solo atom.
 app :: P STerm
@@ -166,7 +166,7 @@ fix = do i <- getPos
          binds <- many (parens binding) <|> return []
          reservedOp "->"
          t <- expr
-         return (SFix i (f,fty) (x,xty) (aux binds) t)
+         return (SFix i (f,fty) (x,xty) (spreadBinds binds) t)
 
 temp :: P [([Char], STy)]
 temp = return []
@@ -184,7 +184,7 @@ letexp = do
           def <- expr
           reserved "in"
           body <- expr
-          return (SLetLam i recBool (aux binds) (v,ty) def body))
+          return (SLetLam i recBool (spreadBinds binds) (v,ty) def body))
       <|> (do ([v],ty) <- binding <|> parens binding
               reservedOp "="  
               def <- expr
@@ -216,7 +216,7 @@ decl = do
             ty <- typeP
             reservedOp "="  
             def <- expr
-            return (SDeclFun i recBool v (aux binds) ty def))
+            return (SDeclFun i recBool v (spreadBinds binds) ty def))
               <|> (do 
                 ([v],ty) <- binding <|> parens binding
                 reservedOp "="  
