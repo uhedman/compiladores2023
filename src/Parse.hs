@@ -168,9 +168,6 @@ fix = do i <- getPos
          t <- expr
          return (SFix i (f,fty) (x,xty) (spreadBinds binds) t)
 
-temp :: P [([Char], STy)]
-temp = return []
-
 letexp :: P STerm
 letexp = do
   i <- getPos
