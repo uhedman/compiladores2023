@@ -29,25 +29,32 @@ elab' env (SV p v) =
     else V p (Global v)
 
 elab' _ (SConst p c) = Const p c
-elab' env (SLam p [] t) = Const p (CNat (-1)) --Eliminar
-elab' env (SLam p [(v, ty)] t) = --Wip
-  Lam p v ty (close v (elab' (v:env) t))
-elab' env (SLam p ((v, ty):binds) t) = --Wip
+elab' env (SLam p [] t) = elab' env t
+elab' env (SLam p ((v, ty):binds) t) =
   Lam p v ty (close v (elab' (v:env) (SLam p binds t)))
-elab' env (SFix p (f,fty) (x,xty) binds t) = --Wip
-  Fix p f fty x xty (close2 f x (elab' (x:f:env) t))
-elab' env (SIfZ p c t e)         = IfZ p (elab' env c) (elab' env t) (elab' env e)
+elab' env (SFix p (f,fty) (x,xty) binds t) = --Wip uso de p
+  Fix p f fty x xty (close2 f x (elab' (x:f:env) (SLam p binds t)))
+elab' env (SIfZ p c t e) = 
+  IfZ p (elab' env c) (elab' env t) (elab' env e)
 -- Operadores binarios
 elab' env (SBinaryOp i o t u) = BinaryOp i o (elab' env t) (elab' env u)
 -- Operador Print
 elab' env (SPrint i str t) = Print i str (elab' env t)
 -- Aplicaciones generales
 elab' env (SApp p h a) = App p (elab' env h) (elab' env a)
-elab' env (SLetLam p recBool binds (v,vty) def body) --Wip
-  | recBool = Let p v vty (elab' env def) (close v (elab' (v:env) body))
+elab' env (SLetLam p recBool [] (v,vty) def body) = Const p (CNat (-1)) -- Eliminar
+elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body) --Wip uso de p
+  | recBool = elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
   | otherwise = Let p v vty (elab' env def) (close v (elab' (v:env) body))
-elab' env (SLetVar p (v,vty) def body) = --Wip
+elab' env (SLetLam p recBool ((x,xty):binds) (v,vty) def body) --Wip uso de p
+  | recBool = elab' env (SLetLam p True [] (v, types binds vty) (SLam p binds def) body)
+  | otherwise = Let p v vty (elab' env def) (close v (elab' (v:env) body))
+elab' env (SLetVar p (v,vty) def body) =
   Let p v vty (elab' env def) (close v (elab' (v:env) body))
+
+types :: [(Name, STy)] -> STy -> STy
+types binds v = foldr f v binds
+  where f (_, vty) = SFun vty
 
 elabDecl :: Decl STerm -> Decl Term
 elabDecl = fmap elab
