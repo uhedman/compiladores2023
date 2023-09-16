@@ -40,7 +40,6 @@ data STm info ty var =
 -- | AST de Tipos
 data Ty =
       NatTy
-    | FunTy Ty Ty
     deriving (Show,Eq)
 
 type Name = String
