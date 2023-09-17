@@ -82,7 +82,7 @@ getPos = do pos <- getPosition
             return $ Pos (sourceLine pos) (sourceColumn pos)
 
 tyatom :: P STy
-tyatom = (reserved "Nat" >> return (Normal NatTy))
+tyatom = (reserved "Nat" >> return SNatTy)
          <|> do v <-var 
                 return (Syn v)
          <|> parens typeP

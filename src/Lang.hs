@@ -40,6 +40,7 @@ data STm info ty var =
 -- | AST de Tipos
 data Ty =
       NatTy
+    | FunTy Ty Ty
     deriving (Show,Eq)
 
 type Name = String
@@ -47,7 +48,7 @@ type Name = String
 type STerm = STm Pos STy Name -- ^ 'STm' tiene 'Name's como variables ligadas y libres y globales, guarda posición  
 
 data STy = 
-      Normal Ty 
+      SNatTy 
     | SFun STy STy 
     | Syn Name deriving Show
 
