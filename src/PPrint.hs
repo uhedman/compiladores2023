@@ -97,14 +97,19 @@ ppName :: Name -> String
 ppName = id
 
 -- | Pretty printer para tipos (Doc)
-ty2doc :: STy -> Doc AnsiStyle
-ty2doc SNatTy = typeColor (pretty "Nat")
-ty2doc (Syn var) = nameColor (pretty var)
-ty2doc (SFun x@(SFun _ _) y) = sep [parens (ty2doc x), typeOpColor (pretty "->"),ty2doc y]
-ty2doc (SFun x y) = sep [ty2doc x, typeOpColor (pretty "->"),ty2doc y] 
+sty2doc :: STy -> Doc AnsiStyle
+sty2doc SNatTy = typeColor (pretty "Nat")
+sty2doc (Syn var) = nameColor (pretty var)
+sty2doc (SFun x@(SFun _ _) y) = sep [parens (sty2doc x), typeOpColor (pretty "->"),sty2doc y]
+sty2doc (SFun x y) = sep [sty2doc x, typeOpColor (pretty "->"),sty2doc y] 
+
+ty2doc :: Ty -> Doc AnsiStyle
+ty2doc NatTy = typeColor (pretty "Nat")
+ty2doc (FunTy x@(FunTy _ _) y) = sep [parens (ty2doc x), typeOpColor (pretty "->"),ty2doc y]
+ty2doc (FunTy x y) = sep [ty2doc x, typeOpColor (pretty "->"),ty2doc y] 
 
 -- | Pretty printer para tipos (String)
-ppTy :: STy -> String
+ppTy :: Ty -> String
 ppTy = render . ty2doc
 
 c2doc :: Const -> Doc AnsiStyle
@@ -191,7 +196,7 @@ t2doc at (SBinaryOp _ o a b) =
 
 binding2doc :: (Name, STy) -> Doc AnsiStyle
 binding2doc (x, ty) =
-  parens (sep [name2doc x, pretty ":", ty2doc ty])
+  parens (sep [name2doc x, pretty ":", sty2doc ty])
 
 -- | Pretty printing de términos (String)
 pp :: MonadFD4 m => TTerm -> m String
