@@ -86,13 +86,13 @@ data Decl a = Decl
 data Tm info var =
     V info var
   | Const info Const
-  | Lam info Name STy (Scope info var)
+  | Lam info Name Ty (Scope info var)
   | App info (Tm info var) (Tm info var)
   | Print info String (Tm info var)
   | BinaryOp info BinaryOp (Tm info var) (Tm info var)
-  | Fix info Name STy Name STy (Scope2 info var)
+  | Fix info Name Ty Name Ty (Scope2 info var)
   | IfZ info (Tm info var) (Tm info var) (Tm info var)
-  | Let info Name STy (Tm info var)  (Scope info var)
+  | Let info Name Ty (Tm info var)  (Scope info var)
   deriving (Show, Functor)
 
 

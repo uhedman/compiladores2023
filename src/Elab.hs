@@ -31,9 +31,9 @@ elab' env (SV p v) =
 elab' _ (SConst p c) = Const p c
 elab' env (SLam p [] t) = elab' env t
 elab' env (SLam p ((v, ty):binds) t) =
-  Lam p v ty (close v (elab' (v:env) (SLam p binds t)))
+  Lam p v (sty2ty ty) (close v (elab' (v:env) (SLam p binds t)))
 elab' env (SFix p (f,fty) (x,xty) binds t) = --Wip uso de p
-  Fix p f fty x xty (close2 f x (elab' (x:f:env) (SLam p binds t)))
+  Fix p f (sty2ty fty) x (sty2ty xty) (close2 f x (elab' (x:f:env) (SLam p binds t)))
 elab' env (SIfZ p c t e) = 
   IfZ p (elab' env c) (elab' env t) (elab' env e)
 -- Operadores binarios
@@ -45,12 +45,12 @@ elab' env (SApp p h a) = App p (elab' env h) (elab' env a)
 elab' env (SLetLam p recBool [] (v,vty) def body) = Const p (CNat (-1)) -- Eliminar
 elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body) --Wip uso de p
   | recBool = elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
-  | otherwise = Let p v vty (elab' env def) (close v (elab' (v:env) body))
+  | otherwise = Let p v (sty2ty vty) (elab' env def) (close v (elab' (v:env) body))
 elab' env (SLetLam p recBool ((x,xty):binds) (v,vty) def body) --Wip uso de p
   | recBool = elab' env (SLetLam p True [] (v, types binds vty) (SLam p binds def) body)
-  | otherwise = Let p v vty (elab' env def) (close v (elab' (v:env) body))
+  | otherwise = Let p v (sty2ty vty) (elab' env def) (close v (elab' (v:env) body))
 elab' env (SLetVar p (v,vty) def body) =
-  Let p v vty (elab' env def) (close v (elab' (v:env) body))
+  Let p v (sty2ty vty) (elab' env def) (close v (elab' (v:env) body))
 
 types :: [(Name, STy)] -> STy -> STy
 types binds v = foldr f v binds
@@ -58,3 +58,8 @@ types binds v = foldr f v binds
 
 elabDecl :: Decl STerm -> Decl Term
 elabDecl = fmap elab
+
+sty2ty :: STy -> Ty
+sty2ty SNatTy = NatTy
+sty2ty (SFun t t') = FunTy (sty2ty t) (sty2ty t')
+sty2ty (Syn name) = NatTy -- Wip necesitaria el entorno donde se uso type
