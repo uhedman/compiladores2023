@@ -54,19 +54,23 @@ openAll gp ns (V p v) = case v of
 openAll gp ns (Const p c) = SConst (gp p) c
 openAll gp ns (Lam p x ty t) = 
   let x' = freshen ns x 
-  in SLam (gp p) [(x',ty)] (openAll gp (x':ns) (open x' t))
+  in SLam (gp p) [(x',ty2sty ty)] (openAll gp (x':ns) (open x' t))
 openAll gp ns (App p t u) = SApp (gp p) (openAll gp ns t) (openAll gp ns u)
 openAll gp ns (Fix p f fty x xty t) = 
   let 
     x' = freshen ns x
     f' = freshen (x':ns) f
-  in SFix (gp p) (f',fty) (x',xty) [] (openAll gp (x:f:ns) (open2 f' x' t))
+  in SFix (gp p) (f',ty2sty fty) (x',ty2sty xty) [] (openAll gp (x:f:ns) (open2 f' x' t))
 openAll gp ns (IfZ p c t e) = SIfZ (gp p) (openAll gp ns c) (openAll gp ns t) (openAll gp ns e)
 openAll gp ns (Print p str t) = SPrint (gp p) str (openAll gp ns t)
 openAll gp ns (BinaryOp p op t u) = SBinaryOp (gp p) op (openAll gp ns t) (openAll gp ns u)
 openAll gp ns (Let p v ty m n) = 
     let v'= freshen ns v 
-    in  SLetVar (gp p) (v',ty) (openAll gp ns m) (openAll gp (v':ns) (open v' n))
+    in  SLetVar (gp p) (v',ty2sty ty) (openAll gp ns m) (openAll gp (v':ns) (open v' n))
+
+ty2sty :: Ty -> STy
+ty2sty NatTy = SNatTy
+ty2sty (FunTy t t') = SFun (ty2sty t) (ty2sty t')
 
 --Colores
 constColor :: Doc AnsiStyle -> Doc AnsiStyle
