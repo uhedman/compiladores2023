@@ -14,43 +14,69 @@ module Elab (elab, elabDecl) where
 
 import Lang
 import Subst
+import MonadFD4 (MonadFD4, lookupTy, failFD4)
 
 -- | 'elab' transforma variables ligadas en índices de de Bruijn
 -- en un término dado. 
-elab :: STerm -> Term
+elab :: MonadFD4 m => STerm -> m Term
 elab = elab' []
 
-elab' :: [Name] -> STerm -> Term
+elab' :: MonadFD4 m => [Name] -> STerm -> m Term
 elab' env (SV p v) =
   -- Tenemos que ver si la variable es Global o es un nombre local
   -- En env llevamos la lista de nombres locales.
   if v `elem` env 
-    then  V p (Free v)
-    else V p (Global v)
+    then return $ V p (Free v)
+    else return $ V p (Global v)
 
-elab' _ (SConst p c) = Const p c
+elab' _ (SConst p c) = return $ Const p c
 elab' env (SLam p [] t) = elab' env t
-elab' env (SLam p ((v, ty):binds) t) =
-  Lam p v (sty2ty ty) (close v (elab' (v:env) (SLam p binds t)))
+elab' env (SLam p ((v, ty):binds) t) = 
+  do ty' <- sty2ty ty
+     e' <- elab' (v:env) (SLam p binds t)
+     return $ Lam p v ty' (close v e')
 elab' env (SFix p (f,fty) (x,xty) binds t) = --Wip uso de p
-  Fix p f (sty2ty fty) x (sty2ty xty) (close2 f x (elab' (x:f:env) (SLam p binds t)))
+  do ty1 <- sty2ty fty
+     ty2 <- sty2ty xty
+     e' <- elab' (x:f:env) (SLam p binds t)
+     return $ Fix p f ty1 x ty2 (close2 f x e')
 elab' env (SIfZ p c t e) = 
-  IfZ p (elab' env c) (elab' env t) (elab' env e)
+  do c' <- elab' env c
+     t' <- elab' env t
+     e' <- elab' env e
+     return $ IfZ p c' t' e'
 -- Operadores binarios
-elab' env (SBinaryOp i o t u) = BinaryOp i o (elab' env t) (elab' env u)
+elab' env (SBinaryOp i o t u) = 
+  do t' <- elab' env t
+     u' <- elab' env u
+     return $ BinaryOp i o t' u'
 -- Operador Print
-elab' env (SPrint i str t) = Print i str (elab' env t)
+elab' env (SPrint i str t) = 
+  do t' <- elab' env t
+     return $ Print i str t'
 -- Aplicaciones generales
-elab' env (SApp p h a) = App p (elab' env h) (elab' env a)
-elab' env (SLetLam p recBool [] (v,vty) def body) = Const p (CNat (-1)) -- Eliminar
+elab' env (SApp p h a) = 
+  do h' <- elab' env h
+     a' <- elab' env a
+     return $ App p h' a'
+elab' env (SLetLam p recBool [] (v,vty) def body) = return $ Const p (CNat (-1)) -- Eliminar
 elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body) --Wip uso de p
   | recBool = elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
-  | otherwise = Let p v (sty2ty vty) (elab' env def) (close v (elab' (v:env) body))
+  | otherwise = do vty' <- sty2ty vty
+                   def' <- elab' env def
+                   body' <- elab' (v:env) body
+                   return $ Let p v vty' def' (close v body')
 elab' env (SLetLam p recBool ((x,xty):binds) (v,vty) def body) --Wip uso de p
   | recBool = elab' env (SLetLam p True [] (v, types binds vty) (SLam p binds def) body)
-  | otherwise = Let p v (sty2ty vty) (elab' env def) (close v (elab' (v:env) body))
+  | otherwise = do vty' <- sty2ty vty
+                   def' <- elab' env def
+                   body' <- elab' (v:env) body
+                   return $ Let p v vty' def' (close v body')
 elab' env (SLetVar p (v,vty) def body) =
-  Let p v (sty2ty vty) (elab' env def) (close v (elab' (v:env) body))
+  do vty' <- sty2ty vty
+     def' <- elab' env def
+     body' <- elab' (v:env) body
+     return $ Let p v vty' def' (close v body')
 
 types :: [(Name, STy)] -> STy -> STy
 types binds v = foldr f v binds
@@ -59,7 +85,12 @@ types binds v = foldr f v binds
 elabDecl :: Decl STerm -> Decl Term
 elabDecl = fmap elab
 
-sty2ty :: STy -> Ty
-sty2ty SNatTy = NatTy
-sty2ty (SFun t t') = FunTy (sty2ty t) (sty2ty t')
-sty2ty (Syn name) = NatTy -- Wip necesitaria el entorno donde se uso type
+sty2ty :: MonadFD4 m => STy -> m Ty
+sty2ty SNatTy = return NatTy
+sty2ty (SFun t1 t2) = do t1' <- sty2ty t1
+                         t2' <- sty2ty t2
+                         return $ FunTy t1' t2'
+sty2ty (Syn name) = do res <- lookupTy name 
+                       case res of
+                         Nothing -> failFD4 $ "Sinonimo de tipo no reconocido: " ++ name
+                         Just ty -> return ty 
