@@ -14,7 +14,7 @@ module Elab (elab, elabDecl) where
 
 import Lang
 import Subst
-import MonadFD4 (MonadFD4, lookupTy, failFD4)
+import MonadFD4 (MonadFD4, lookupTy, failFD4, failPosFD4)
 
 -- | 'elab' transforma variables ligadas en índices de de Bruijn
 -- en un término dado. 
@@ -59,7 +59,7 @@ elab' env (SApp p h a) =
   do h' <- elab' env h
      a' <- elab' env a
      return $ App p h' a'
-elab' env (SLetLam p recBool [] (v,vty) def body) = return $ Const p (CNat (-1)) -- Eliminar
+elab' env (SLetLam p recBool [] (v,vty) def body) = failPosFD4 p "Let sin argumentos"
 elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body) --Wip uso de p
   | recBool = elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
   | otherwise = do vty' <- sty2ty vty
