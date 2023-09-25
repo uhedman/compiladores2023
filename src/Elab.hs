@@ -82,15 +82,27 @@ types :: [(Name, STy)] -> STy -> STy
 types binds v = foldr f v binds
   where f (_, vty) = SFun vty
 
-elabDecl :: Decl STerm -> Decl Term
-elabDecl = fmap elab
+elabDecl :: MonadFD4 m => SDecl STerm -> m (Decl Term)
+elabDecl (SDeclTy p n ty) = 
+  do ty' <- sty2ty ty
+     return $ DeclTy p n ty'
+elabDecl (SDeclVar p n ty body) = 
+  do body' <- elab body
+     return $ Decl p n body'
+elabDecl (SDeclFun p r n [] ty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
+elabDecl (SDeclFun p False n args ty body) = 
+  elabDecl $ SDeclVar p n ty (SLam p args body)
+elabDecl (SDeclFun p True n args ty body) = 
+  elabDecl $ SDeclVar p n ty (SFix p (n, ty) (head args) (tail args) body)
 
 sty2ty :: MonadFD4 m => STy -> m Ty
 sty2ty SNatTy = return NatTy
-sty2ty (SFun t1 t2) = do t1' <- sty2ty t1
-                         t2' <- sty2ty t2
-                         return $ FunTy t1' t2'
-sty2ty (Syn name) = do res <- lookupTy name 
-                       case res of
-                         Nothing -> failFD4 $ "Sinonimo de tipo no reconocido: " ++ name
-                         Just ty -> return ty 
+sty2ty (SFun t1 t2) = 
+  do t1' <- sty2ty t1
+     t2' <- sty2ty t2
+     return $ FunTy t1' t2'
+sty2ty (Syn name) = 
+  do res <- lookupTy name 
+     case res of
+       Nothing -> failFD4 $ "Sinonimo de tipo no reconocido: " ++ name
+       Just ty -> return ty 

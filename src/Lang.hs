@@ -57,15 +57,15 @@ data SDecl a =
             , sdeclName :: Name
             , sdeclType :: STy
             }
+  | SDeclVar { sdeclPos  :: Pos
+             , sdeclName :: Name
+             , sdeclType :: STy
+             , sdeclBody :: a
+             } 
   | SDeclFun { sdeclPos  :: Pos
              , sdeclRec  :: Bool
              , sdeclName :: Name
              , sdeclArgs :: [(Name, STy)]
-             , sdeclType :: STy
-             , sdeclBody :: a
-             }
-  | SDeclVar { sdeclPos  :: Pos
-             , sdeclName :: Name
              , sdeclType :: STy
              , sdeclBody :: a
              } deriving (Show, Functor)
