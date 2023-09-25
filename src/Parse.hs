@@ -202,7 +202,7 @@ decl = do
     v <- var
     reservedOp "="
     ty <- typeP
-    return (DSyn v ty))
+    return (SDeclTy i v ty))
       <|> (do 
           reserved "let"
           try (do 
