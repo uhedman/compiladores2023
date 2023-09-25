@@ -106,9 +106,11 @@ lookupDecl nm = do
      s <- get
      case filter (hasName nm) (glb s) of
        (Decl { declBody=e }):_ -> return (Just e)
+       (DeclTy {}):_ -> return Nothing
        [] -> return Nothing
    where hasName :: Name -> Decl a -> Bool
          hasName nm (Decl { declName = nm' }) = nm == nm'
+         hasName nm (DeclTy { declName = nm' }) = nm == nm'
 
 lookupTy :: MonadFD4 m => Name -> m (Maybe Ty)
 lookupTy nm = do
