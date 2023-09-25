@@ -113,3 +113,8 @@ tcDecl (Decl p n t) = do
                   tt <- tc t (tyEnv s)                 
                   return (Decl p n tt)
         Just _  -> failPosFD4 p $ n ++" ya está declarado"
+tcDecl (DeclTy p n ty) = 
+  do mty <- lookupTy n
+     case mty of
+        Nothing -> return (DeclTy p n ty)
+        Just _  -> failPosFD4 p $ n ++" ya está declarado"
