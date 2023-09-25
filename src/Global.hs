@@ -17,12 +17,13 @@ data GlEnv = GlEnv {
                         -- Es falso mientras se cargan archivos, pero luego puede ser verdadero.
   lfile :: String,      -- ^ Último archivo cargado.
   cantDecl :: Int,      -- ^ Cantidad de declaraciones desde la última carga
-  glb :: [Decl TTerm]  -- ^ Entorno con declaraciones globales
+  glb :: [Decl TTerm],  -- ^ Entorno con declaraciones globales
+  env :: [(Name, Ty)]   -- ^ Entorno con declaraciones de tipos globales
 }
 
 -- ^ Entorno de tipado de declaraciones globales
 tyEnv :: GlEnv ->  [(Name,Ty)]
-tyEnv g = map (\(Decl _ n b) -> (n, getTy b))  (glb g)
+tyEnv g = map (\(Decl _ n b) -> (n, getTy b)) (glb g) ++ env g
 
 {-
  Tipo para representar las banderas disponibles en línea de comando.
@@ -45,4 +46,4 @@ data Conf = Conf {
 
 -- | Valor del estado inicial
 initialEnv :: GlEnv
-initialEnv = GlEnv False "" 0 []
+initialEnv = GlEnv False "" 0 [] []

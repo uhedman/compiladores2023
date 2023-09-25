@@ -32,6 +32,7 @@ module MonadFD4 (
   failPosFD4,
   failFD4,
   addDecl,
+  addTy,
   catchErrors,
   MonadFD4,
   module Control.Monad.Except,
@@ -89,6 +90,9 @@ getLastFile = gets lfile
 
 addDecl :: MonadFD4 m => Decl TTerm -> m ()
 addDecl d = modify (\s -> s { glb = d : glb s, cantDecl = cantDecl s + 1 })
+
+addTy :: MonadFD4 m => Name -> Ty -> m ()
+addTy n ty = modify (\s -> s { env = (n,ty) : env s })
 
 eraseLastFileDecls :: MonadFD4 m => m ()
 eraseLastFileDecls = do

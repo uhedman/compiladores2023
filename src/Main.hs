@@ -30,7 +30,7 @@ import Global
 import Errors
 import Lang
 import Parse ( P, tm, program, declOrTm, runP )
-import Elab ( elab )
+import Elab ( elab, elabDecl )
 import Eval ( eval )
 import PPrint ( pp , ppTy, ppDecl )
 import MonadFD4
@@ -130,18 +130,23 @@ parseIO filename p x = case runP p x filename of
                   Right r -> return r
 
 evalDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
-evalDecl (Decl p x e) = do
-    e' <- eval e
-    return (Decl p x e')
+evalDecl (Decl p x e) = 
+  do e' <- eval e
+     return $ Decl p x e'
+evalDecl (DeclTy p n t) = return $ DeclTy p n t
 
 handleDecl ::  MonadFD4 m => SDecl STerm -> m ()
 handleDecl d = do
         m <- getMode
         case m of
           Interactive -> do
-              (Decl p x tt) <- typecheckDecl d
-              te <- eval tt
-              addDecl (Decl p x te)
+              dd <- typecheckDecl d
+              case dd of
+                (Decl p x tt) -> do
+                  te <- eval tt
+                  addDecl (Decl p x te)
+                (DeclTy p x ty) -> do
+                  addTy x ty
           Typecheck -> do
               f <- getLastFile
               printFD4 ("Chequeando tipos de "++f)
@@ -158,8 +163,11 @@ handleDecl d = do
               addDecl ed
 
       where
-        typecheckDecl :: MonadFD4 m => Decl STerm -> m (Decl TTerm)
-        typecheckDecl (Decl p x t) = tcDecl (Decl p x (elab t))
+        typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
+        typecheckDecl decl = 
+          do decl' <- elabDecl decl
+             tcDecl decl' 
+
 
 
 data Command = Compile CompileForm
