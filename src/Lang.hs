@@ -33,27 +33,29 @@ data STm info ty var =
   | SBinaryOp info BinaryOp (STm info ty var) (STm info ty var)
   | SFix info (var, ty) (var, ty) [(var, ty)] (STm info ty var)
   | SIfZ info (STm info ty var) (STm info ty var) (STm info ty var)
-  | SLetLam info Bool [(var, ty)] (var, ty) (STm info ty var) (STm info ty var)
   | SLetVar info (var, ty) (STm info ty var) (STm info ty var)
+  | SLetLam info Bool [(var, ty)] (var, ty) (STm info ty var) (STm info ty var)
   deriving (Show, Functor)
 
 -- | AST de Tipos
 data Ty =
-      NatTy
-    | FunTy Ty Ty
-    deriving (Show,Eq)
+    NatTy
+  | FunTy Ty Ty
+  deriving (Show,Eq)
 
 type Name = String
 
 type STerm = STm Pos STy Name -- ^ 'STm' tiene 'Name's como variables ligadas y libres y globales, guarda posición  
 
 data STy = 
-      SNatTy 
-    | SFun STy STy 
-    | Syn Name deriving Show
+    SNatTy 
+  | SFun STy STy 
+  | Syn Name deriving Show
 
 data SDecl a = 
-    DSyn Name STy 
+    SDeclTy { sdeclPos  :: Pos
+            , sdeclName :: Name
+            , sdeclType :: STy}
   | SDeclFun { sdeclPos  :: Pos
              , sdeclRec  :: Bool
              , sdeclName :: Name
