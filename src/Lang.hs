@@ -55,17 +55,20 @@ data STy =
 data SDecl a = 
     SDeclTy { sdeclPos  :: Pos
             , sdeclName :: Name
-            , sdeclType :: STy}
+            , sdeclType :: STy
+            }
   | SDeclFun { sdeclPos  :: Pos
              , sdeclRec  :: Bool
              , sdeclName :: Name
              , sdeclArgs :: [(Name, STy)]
              , sdeclType :: STy
-             , sdeclBody :: a}
+             , sdeclBody :: a
+             }
   | SDeclVar { sdeclPos  :: Pos
              , sdeclName :: Name
              , sdeclType :: STy
-             , sdeclBody :: a} deriving (Show, Functor)
+             , sdeclBody :: a
+             } deriving (Show, Functor)
 
 newtype Const = CNat Int
   deriving Show
@@ -74,12 +77,15 @@ data BinaryOp = Add | Sub
   deriving Show
 
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
-data Decl a = Decl
-  { declPos  :: Pos
-  , declName :: Name
-  , declBody :: a
-  }
-  deriving (Show, Functor)
+data Decl a = 
+    Decl { declPos  :: Pos
+         , declName :: Name
+         , declBody :: a
+         }
+  | DeclTy { declPos  :: Pos
+           , declName :: Name
+           , declTy :: Ty
+           } deriving (Show, Functor)
 
 -- | AST de los términos. 
 --   - info es información extra que puede llevar cada nodo. 
