@@ -217,5 +217,9 @@ ppDecl (Decl p x t) = do
                        , name2doc x 
                        , defColor (pretty "=")] 
                    <+> nest 2 (t2doc False (openAll fst (map declName gdecl) t)))
-                         
-
+ppDecl (DeclTy p x t) = do 
+  gdecl <- gets glb
+  return (render $ sep [defColor (pretty "let")
+                       , name2doc x 
+                       , defColor (pretty "=")
+                       , ty2doc t])
