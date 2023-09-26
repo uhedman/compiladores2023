@@ -1,0 +1,1 @@
+let rec suma (m n : Nat) : Nat = ifz n then m else 1 + suma m (n - 1)
