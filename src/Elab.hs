@@ -35,11 +35,16 @@ elab' env (SLam p ((v, ty):binds) t) =
   do ty' <- sty2ty ty
      e' <- elab' (v:env) (SLam p binds t)
      return $ Lam p v ty' (close v e')
-elab' env (SFix p (f,fty) (x,xty) binds t) = --Wip uso de p
-  do ty1 <- sty2ty fty
-     ty2 <- sty2ty xty
+elab' env (SFix p (f,fty) (x,xty) [] t) =
+  do fty' <- sty2ty fty
+     xty' <- sty2ty xty
+     e' <- elab' (x:f:env) t
+     return $ Fix p f fty' x xty' (close2 f x e')
+elab' env (SFix p (f,fty) (x,xty) binds t) =
+  do fty' <- sty2ty fty
+     xty' <- sty2ty xty
      e' <- elab' (x:f:env) (SLam p binds t)
-     return $ Fix p f ty1 x ty2 (close2 f x e')
+     return $ Fix p f fty' x xty' (close2 f x e')
 elab' env (SIfZ p c t e) = 
   do c' <- elab' env c
      t' <- elab' env t
