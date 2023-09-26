@@ -50,7 +50,8 @@ type STerm = STm Pos STy Name -- ^ 'STm' tiene 'Name's como variables ligadas y 
 data STy = 
     SNatTy 
   | SFun STy STy 
-  | Syn Name deriving Show
+  | Syn Name 
+  deriving (Show,Eq)
 
 data SDecl a = 
     SDeclTy { sdeclPos  :: Pos
