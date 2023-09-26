@@ -98,7 +98,7 @@ elabDecl (SDeclFun p r n [] ty body) = failPosFD4 p "Declaracion de funcion sin 
 elabDecl (SDeclFun p False n args ty body) = 
   elabDecl $ SDeclVar p n ty (SLam p args body)
 elabDecl (SDeclFun p True n args ty body) = 
-  elabDecl $ SDeclVar p n ty (SFix p (n, ty) (head args) (tail args) body)
+  elabDecl $ SDeclVar p n (types args ty) (SFix p (n, ty) (head args) (tail args) body)
 
 sty2ty :: MonadFD4 m => STy -> m Ty
 sty2ty SNatTy = return NatTy
