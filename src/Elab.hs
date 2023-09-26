@@ -30,7 +30,11 @@ elab' env (SV p v) =
     else return $ V p (Global v)
 
 elab' _ (SConst p c) = return $ Const p c
-elab' env (SLam p [] t) = elab' env t
+elab' env (SLam p [] t) = failPosFD4 p "Funcion sin argumentos"
+elab' env (SLam p [(v, ty)] t) = 
+  do ty' <- sty2ty ty
+     e' <- elab' (v:env) t
+     return $ Lam p v ty' (close v e')
 elab' env (SLam p ((v, ty):binds) t) = 
   do ty' <- sty2ty ty
      e' <- elab' (v:env) (SLam p binds t)
@@ -72,7 +76,7 @@ elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body) --Wip uso de p
                    body' <- elab' (v:env) body
                    return $ Let p v vty' def' (close v body')
 elab' env (SLetLam p recBool ((x,xty):binds) (v,vty) def body) --Wip uso de p
-  | recBool = elab' env (SLetLam p True [] (v, types binds vty) (SLam p binds def) body)
+  | recBool = elab' env (SLetLam p True [(x,xty)] (v, types binds vty) (SLam p binds def) body)
   | otherwise = do vty' <- sty2ty vty
                    def' <- elab' env def
                    body' <- elab' (v:env) body
