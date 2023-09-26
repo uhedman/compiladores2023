@@ -95,10 +95,14 @@ elabDecl (SDeclVar p n ty body) =
   do body' <- elab body
      return $ Decl p n body'
 elabDecl (SDeclFun p r n [] ty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
+elabDecl (SDeclFun p False n [(x, xty)] ty body) = 
+  elabDecl $ SDeclVar p n (SFun xty ty) (SLam p [(x, xty)] body)
+elabDecl (SDeclFun p True n [(x, xty)] ty body) = 
+  elabDecl $ SDeclVar p n (SFun xty ty) (SFix p (n, ty) (x, xty) [] body)
 elabDecl (SDeclFun p False n args ty body) = 
-  elabDecl $ SDeclVar p n ty (SLam p args body)
+  elabDecl $ SDeclVar p n (types args ty) (SLam p args body)
 elabDecl (SDeclFun p True n args ty body) = 
-  elabDecl $ SDeclVar p n (types args ty) (SFix p (n, ty) (head args) (tail args) body)
+  elabDecl $ SDeclFun p True n [head args] (types (tail args) ty) (SLam p (tail args) body)
 
 sty2ty :: MonadFD4 m => STy -> m Ty
 sty2ty SNatTy = return NatTy
