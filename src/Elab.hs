@@ -69,23 +69,17 @@ elab' env (SApp p h a) =
      a' <- elab' env a
      return $ App p h' a'
 elab' env (SLetLam p recBool [] (v,vty) def body) = failPosFD4 p "Let sin argumentos"
-elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body) --Wip uso de p
-  | recBool = elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
-  | otherwise = do vty' <- sty2ty vty
-                   def' <- elab' env def
-                   body' <- elab' (v:env) body
-                   return $ Let p v vty' def' (close v body')
-elab' env (SLetLam p recBool ((x,xty):binds) (v,vty) def body) --Wip uso de p
-  | recBool = elab' env (SLetLam p True [(x,xty)] (v, types binds vty) (SLam p binds def) body)
-  | otherwise = do vty' <- sty2ty vty
-                   def' <- elab' env def
-                   body' <- elab' (v:env) body
-                   return $ Let p v vty' def' (close v body')
 elab' env (SLetVar p (v,vty) def body) =
   do vty' <- sty2ty vty
      def' <- elab' env def
      body' <- elab' (v:env) body
      return $ Let p v vty' def' (close v body')
+elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body)
+  | recBool = elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
+  | otherwise = elab' env $ SLetVar p (v, SFun xty vty) def body
+elab' env (SLetLam p recBool ((x,xty):binds) (v,vty) def body)
+  | recBool = elab' env (SLetLam p True [(x,xty)] (v, types binds vty) (SLam p binds def) body)
+  | otherwise = elab' env $ SLetVar p (v, types ((x,xty):binds) vty) def body
 
 types :: [(Name, STy)] -> STy -> STy
 types binds v = foldr f v binds
