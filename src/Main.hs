@@ -45,7 +45,7 @@ prompt = "FD4> "
 parseMode :: Parser (Mode,Bool)
 parseMode = (,) <$>
       (flag' Typecheck ( long "typecheck" <> short 't' <> help "Chequear tipos e imprimir el término")
-  -- <|> flag' InteractiveCEK (long "interactiveCEK" <> short 'k' <> help "Ejecutar interactivamente en la CEK")
+  <|> flag' InteractiveCEK (long "interactiveCEK" <> short 'k' <> help "Ejecutar interactivamente en la CEK")
   -- <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
   -- <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
       <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
@@ -147,6 +147,8 @@ handleDecl d = do
                   addDecl (Decl p x te)
                 (DeclTy p x ty) -> do
                   addTy x ty
+          InteractiveCEK -> do
+              failFD4 "Not implemented"
           Typecheck -> do
               f <- getLastFile
               printFD4 ("Chequeando tipos de "++f)
