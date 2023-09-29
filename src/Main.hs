@@ -35,6 +35,7 @@ import Eval ( eval )
 import PPrint ( pp , ppTy, ppDecl )
 import MonadFD4
 import TypeChecker ( tc, tcDecl )
+import CEK ( cek )
 
 prompt :: String
 prompt = "FD4> "
@@ -74,6 +75,8 @@ main = execParser opts >>= go
     go :: (Mode,Bool,[FilePath]) -> IO ()
     go (Interactive,opt,files) =
               runOrFail (Conf opt Interactive) (runInputT defaultSettings (repl files))
+    go (InteractiveCEK,opt,files) =
+              runOrFail (Conf opt InteractiveCEK) (runInputT defaultSettings (repl files))
     go (m,opt, files) =
               runOrFail (Conf opt m) $ mapM_ compileFile files
 
@@ -148,7 +151,13 @@ handleDecl d = do
                 (DeclTy p x ty) -> do
                   addTy x ty
           InteractiveCEK -> do
-              failFD4 "Not implemented"
+              dd <- typecheckDecl d
+              case dd of
+                (Decl p x tt) -> do
+                  te <- cek tt
+                  addDecl (Decl p x te)
+                (DeclTy p x ty) -> do
+                  addTy x ty
           Typecheck -> do
               f <- getLastFile
               printFD4 ("Chequeando tipos de "++f)
