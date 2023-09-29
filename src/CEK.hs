@@ -46,15 +46,11 @@ seek (Print _ s t) env k = seek t env (FrPrint s:k)
 seek (BinaryOp _ op t u) env k = seek t env (FrBOpL env op u:k)
 seek (IfZ _ c t e) env k = seek c env (FrIfz env t e:k)
 seek (App _ t u) env k = seek t env (FrApp env u:k)
+seek (V _ (Free n)) env k = failFD4 "Free variable when using de Bruijn indexes"
 seek (V _ (Bound i)) env k = 
   case nth i env of
     Nothing -> failFD4 "Variable not found"
     Just v -> destroy v k
-seek (V _ (Free n)) env k = -- Eliminar?
-  do res <- lookupDecl n
-     case res of
-       Nothing -> failFD4 "Variable not found"
-       Just v -> seek v env k
 seek (V _ (Global n)) env k = 
   do res <- lookupDecl n
      case res of
@@ -77,10 +73,10 @@ destroy :: MonadFD4 m => Val -> Kont -> m Val
 destroy v (FrPrint s:k) = 
   do printFD4 s -- agregar str(v)
      destroy v k
-destroy n (FrBOpL env op u:k) = seek u env (FrBOpR n op:k)
-destroy n' (FrBOpR n op:k) = destroy (evalOp op n n') k
+destroy (Nat n) (FrBOpL env op u:k) = seek u env (FrBOpR (Nat n) op:k)
+destroy (Nat n') (FrBOpR (Nat n) op:k) = destroy (evalOp op (Nat n) (Nat n')) k
 destroy (Nat 0) (FrIfz env t e:k) = seek t env k
-destroy np (FrIfz env t e:k) = seek e env k
+destroy (Nat np) (FrIfz env t e:k) = seek e env k
 destroy (Clos c) (FrApp env t:k) = seek t env (FrClos c:k)
 destroy v (FrClos (ClFun env x t):k) = seek t (v:env) k
 destroy v (FrClos (ClFix env f x t):k) = seek t (Clos (ClFix env f x t):v:env) k
