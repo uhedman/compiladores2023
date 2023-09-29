@@ -23,7 +23,7 @@ data Clos =
     ClFun Env Name TTerm
   | ClFix Env Name Name TTerm
 
-type Env = [(Name, Val)]
+type Env = [Val]
 
 data Frame =
     FrApp Env TTerm
@@ -36,15 +36,25 @@ data Frame =
 
 type Kont = [Frame]
 
+nth :: Int -> Env -> Maybe Val
+nth _ [] = Nothing
+nth 0 (v:env) = Just v
+nth n (_:env) = nth (n-1) env
+
 seek :: MonadFD4 m => TTerm -> Env -> Kont -> m Val
 seek (Print _ s t) env k = seek t env (FrPrint s:k)
 seek (BinaryOp _ op t u) env k = seek t env (FrBOpL env op u:k)
 seek (IfZ _ c t e) env k = seek c env (FrIfz env t e:k)
 seek (App _ t u) env k = seek t env (FrApp env u:k)
-seek (V _ (Free n)) env k = 
-  case lookup n env of
+seek (V _ (Bound i)) env k = 
+  case nth i env of
     Nothing -> failFD4 "Variable not found"
     Just v -> destroy v k
+seek (V _ (Free n)) env k = -- Eliminar?
+  do res <- lookupDecl n
+     case res of
+       Nothing -> failFD4 "Variable not found"
+       Just v -> seek v env k
 seek (V _ (Global n)) env k = 
   do res <- lookupDecl n
      case res of
@@ -57,7 +67,6 @@ seek (Fix _ f _ x _ t) env k =
   destroy (Clos (ClFix env f x (open2 f x t))) k
 seek (Let _ x _ s t) env k = 
   seek s env (FrLet env x (open x t):k)
-seek _ _ _ = failFD4 "Bad args in seek"
 
 evalOp :: BinaryOp -> Val -> Val -> Val
 evalOp Add (Nat n) (Nat n')= Nat (n+n')
@@ -73,9 +82,9 @@ destroy n' (FrBOpR n op:k) = destroy (evalOp op n n') k
 destroy (Nat 0) (FrIfz env t e:k) = seek t env k
 destroy np (FrIfz env t e:k) = seek e env k
 destroy (Clos c) (FrApp env t:k) = seek t env (FrClos c:k)
-destroy v (FrClos (ClFun env x t):k) = seek t ((x,v):env) k
-destroy v (FrClos (ClFix env f x t):k) = seek t ((f,Clos (ClFix env f x t)):(x,v):env) k
-destroy v (FrLet env x t:k) = seek t ((x,v):env) k
+destroy v (FrClos (ClFun env x t):k) = seek t (v:env) k
+destroy v (FrClos (ClFix env f x t):k) = seek t (Clos (ClFix env f x t):v:env) k
+destroy v (FrLet env x t:k) = seek t (v:env) k
 destroy v [] = return v
 destroy _ _ = failFD4 "Bad args in destroy"
 
