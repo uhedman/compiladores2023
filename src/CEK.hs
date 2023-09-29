@@ -41,7 +41,10 @@ seek (Print _ s t) env k = seek t env (FrPrint s:k)
 seek (BinaryOp _ op t u) env k = seek t env (FrBOpL env op u:k)
 seek (IfZ _ c t e) env k = seek c env (FrIfz env t e:k)
 seek (App _ t u) env k = seek t env (FrApp env u:k)
-seek (V _ var) env k = return $ Nat 0 -- Wip
+seek (V _ (Free n)) env k = 
+  case lookup n env of
+    Nothing -> error "Variable no encontrada"
+    Just v -> destroy v k
 seek (Const _ (CNat n)) env k = destroy (Nat n) k
 seek (Lam _ x _ t) env k = 
   destroy (Clos (ClFun env x (open x t))) k
@@ -49,6 +52,7 @@ seek (Fix _ f _ x _ t) env k =
   destroy (Clos (ClFix env f x (open2 f x t))) k
 seek (Let _ x _ s t) env k = 
   seek s env (FrLet env x (open x t):k)
+seek _ _ _ = error "Bad args"
 
 evalOp :: BinaryOp -> Val -> Val -> Val
 evalOp Add (Nat n) (Nat n')= Nat (n+n')
@@ -68,7 +72,7 @@ destroy v (FrClos (ClFun env x t):k) = seek t ((x,v):env) k
 destroy v (FrClos (ClFix env f x t):k) = seek t ((f,Clos (ClFix env f x t)):(x,v):env) k
 destroy v (FrLet env x t:k) = seek t ((x,v):env) k
 destroy v [] = return v
-destroy v e = error "Bad args"
+destroy _ _ = error "Bad args"
 
 cek :: MonadFD4 m => TTerm -> m TTerm
 cek t = do t' <- seek t [] []
