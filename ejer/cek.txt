@@ -1,0 +1,17 @@
+1)
+let x = v in t -> [v/x]t
+
+______________s->s'______________
+let x = s in t -> let x = s' in t
+2)
+let x = Frame in t
+3)
+let x = □ in t
+4)
+(let x = s in t, k) -> (s, let x = □ in t > k)
+((v, let x = □ in t > k)) -> ([v/x]t, > k)
+5)
+env let x = □ in t
+6)
+(let x = s in t, env, k) -> (s, env, env . let x = □ in t > k)
+((v, env . let x = □ in t > k)) -> (t, env(x->v), k)
