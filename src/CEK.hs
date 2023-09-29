@@ -66,7 +66,9 @@ destroy np (FrIfz env t e:k) = seek e env k
 destroy (Clos c) (FrApp env t:k) = seek t env (FrClos c:k)
 destroy v (FrClos (ClFun env x t):k) = seek t ((x,v):env) k
 destroy v (FrClos (ClFix env f x t):k) = seek t ((f,Clos (ClFix env f x t)):(x,v):env) k
-destroy v e = return v
+destroy v (FrLet env x t:k) = seek t ((x,v):env) k
+destroy v [] = return v
+destroy v e = error "Bad args"
 
 cek :: MonadFD4 m => TTerm -> m TTerm
 cek t = do t' <- seek t [] []
