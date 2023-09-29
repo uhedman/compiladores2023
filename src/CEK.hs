@@ -11,7 +11,7 @@ Stability   : experimental
 module CEK where
 
 import Lang
-import MonadFD4 ( MonadFD4, printFD4 )
+import MonadFD4 ( MonadFD4, printFD4, failFD4 )
 import Common ( Pos( NoPos ) )
 import Subst ( close, close2, open, open2)
 
@@ -43,7 +43,7 @@ seek (IfZ _ c t e) env k = seek c env (FrIfz env t e:k)
 seek (App _ t u) env k = seek t env (FrApp env u:k)
 seek (V _ (Free n)) env k = 
   case lookup n env of
-    Nothing -> error "Variable no encontrada"
+    Nothing -> failFD4 "Variable not found"
     Just v -> destroy v k
 seek (Const _ (CNat n)) env k = destroy (Nat n) k
 seek (Lam _ x _ t) env k = 
@@ -52,7 +52,7 @@ seek (Fix _ f _ x _ t) env k =
   destroy (Clos (ClFix env f x (open2 f x t))) k
 seek (Let _ x _ s t) env k = 
   seek s env (FrLet env x (open x t):k)
-seek _ _ _ = error "Bad args"
+seek _ _ _ = failFD4 "Bad args in seek"
 
 evalOp :: BinaryOp -> Val -> Val -> Val
 evalOp Add (Nat n) (Nat n')= Nat (n+n')
@@ -72,7 +72,7 @@ destroy v (FrClos (ClFun env x t):k) = seek t ((x,v):env) k
 destroy v (FrClos (ClFix env f x t):k) = seek t ((f,Clos (ClFix env f x t)):(x,v):env) k
 destroy v (FrLet env x t:k) = seek t ((x,v):env) k
 destroy v [] = return v
-destroy _ _ = error "Bad args"
+destroy _ _ = failFD4 "Bad args in destroy"
 
 cek :: MonadFD4 m => TTerm -> m TTerm
 cek t = do t' <- seek t [] []
