@@ -11,7 +11,7 @@ Stability   : experimental
 module CEK where
 
 import Lang
-import MonadFD4 ( MonadFD4, printFD4, failFD4 )
+import MonadFD4 ( MonadFD4, printFD4, failFD4, lookupDecl )
 import Common ( Pos( NoPos ) )
 import Subst ( close, close2, open, open2)
 
@@ -45,6 +45,11 @@ seek (V _ (Free n)) env k =
   case lookup n env of
     Nothing -> failFD4 "Variable not found"
     Just v -> destroy v k
+seek (V _ (Global n)) env k = 
+  do res <- lookupDecl n
+     case res of
+       Nothing -> failFD4 "Variable not found"
+       Just v -> seek v env k
 seek (Const _ (CNat n)) env k = destroy (Nat n) k
 seek (Lam _ x _ t) env k = 
   destroy (Clos (ClFun env x (open x t))) k
