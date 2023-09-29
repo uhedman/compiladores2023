@@ -13,7 +13,7 @@ module CEK where
 import Lang
 import MonadFD4 ( MonadFD4, printFD4 )
 import Common ( Pos( NoPos ) )
-import Subst ( close, close2 )
+import Subst ( close, close2, open, open2)
 
 data Val = 
     Nat Int
@@ -32,12 +32,23 @@ data Frame =
   | FrBOpL Env BinaryOp TTerm
   | FrBOpR Val BinaryOp
   | FrPrint String
-  | FrLet Env TTerm
+  | FrLet Env Name TTerm
 
 type Kont = [Frame]
 
 seek :: MonadFD4 m => TTerm -> Env -> Kont -> m Val
-seek _ _ _ = error "Not implemented"
+seek (Print _ s t) env k = seek t env (FrPrint s:k)
+seek (BinaryOp _ op t u) env k = seek t env (FrBOpL env op u:k)
+seek (IfZ _ c t e) env k = seek c env (FrIfz env t e:k)
+seek (App _ t u) env k = seek t env (FrApp env u:k)
+seek (V _ var) env k = return $ Nat 0 -- Wip
+seek (Const _ (CNat n)) env k = destroy (Nat n) k
+seek (Lam _ x _ t) env k = 
+  destroy (Clos (ClFun env x (open x t))) k
+seek (Fix _ f _ x _ t) env k = 
+  destroy (Clos (ClFix env f x (open2 f x t))) k
+seek (Let _ x _ s t) env k = 
+  seek s env (FrLet env x (open x t):k)
 
 evalOp :: BinaryOp -> Val -> Val -> Val
 evalOp Add (Nat n) (Nat n')= Nat (n+n')
