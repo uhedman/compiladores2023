@@ -54,13 +54,16 @@ openAll gp ns (V p v) = case v of
 openAll gp ns (Const p c) = SConst (gp p) c
 openAll gp ns (Lam p x ty t) = 
   let x' = freshen ns x 
-  in SLam (gp p) [(x',ty2sty ty)] (openAll gp (x':ns) (open x' t))
+  in case openAll gp (x':ns) (open x' t) of
+        SLam y tys t' -> SLam (gp p) ((x',ty2sty ty):tys) t'
+        t' -> SLam (gp p) [(x',ty2sty ty)] t'
 openAll gp ns (App p t u) = SApp (gp p) (openAll gp ns t) (openAll gp ns u)
 openAll gp ns (Fix p f fty x xty t) = 
-  let 
-    x' = freshen ns x
-    f' = freshen (x':ns) f
-  in SFix (gp p) (f',ty2sty fty) (x',ty2sty xty) [] (openAll gp (x:f:ns) (open2 f' x' t))
+  let x' = freshen ns x
+      f' = freshen (x':ns) f
+  in case openAll gp (x:f:ns) (open2 f' x' t) of
+    SLam y tys t' -> SFix (gp p) (f',ty2sty fty) (x',ty2sty xty) tys t'
+    t' -> SFix (gp p) (f',ty2sty fty) (x',ty2sty xty) [] t'
 openAll gp ns (IfZ p c t e) = SIfZ (gp p) (openAll gp ns c) (openAll gp ns t) (openAll gp ns e)
 openAll gp ns (Print p str t) = SPrint (gp p) str (openAll gp ns t)
 openAll gp ns (BinaryOp p op t u) = SBinaryOp (gp p) op (openAll gp ns t) (openAll gp ns u)
