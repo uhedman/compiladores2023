@@ -150,7 +150,8 @@ handleDecl d = do
               dd <- typecheckDecl d
               case dd of
                 (Decl p x tt) -> do
-                  te <- eval tt
+                  cek <- getCek
+                  te <- if cek then evalCEK tt else eval tt
                   addDecl (Decl p x te)
                 (DeclTy p x ty) -> do
                   addTy x ty
@@ -166,7 +167,8 @@ handleDecl d = do
           Eval -> do
               td <- typecheckDecl d
               -- td' <- if opt then optimizeDecl td else return td
-              ed <- evalDecl td
+              cek <- getCek
+              ed <- if cek then evalDeclCek td else evalDecl td
               addDecl ed
 
       where
