@@ -32,7 +32,6 @@ data Mode =
     Interactive
   | Typecheck
   | Eval
-  | InteractiveCEK
   -- | Bytecompile
   -- | RunVM
   -- | CC
@@ -41,6 +40,7 @@ data Mode =
   -- | Build
 data Conf = Conf {
     opt :: Bool,          --  ^ True, si estan habilitadas las optimizaciones.
+    cek :: Bool,          --  ^ True, si se utiliza la CEK.
     modo :: Mode
 }
 

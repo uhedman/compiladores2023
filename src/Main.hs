@@ -35,7 +35,7 @@ import Eval ( eval )
 import PPrint ( pp , ppTy, ppDecl )
 import MonadFD4
 import TypeChecker ( tc, tcDecl )
-import CEK ( cek )
+import CEK ( evalCEK )
 
 prompt :: String
 prompt = "FD4> "
@@ -43,13 +43,12 @@ prompt = "FD4> "
 
 
 -- | Parser de banderas
-parseMode :: Parser (Mode,Bool)
-parseMode = (,) <$>
+parseMode :: Parser (Mode,Bool,Bool)
+parseMode = (,,) <$>
       (flag' Typecheck ( long "typecheck" <> short 't' <> help "Chequear tipos e imprimir el término")
-  <|> flag' InteractiveCEK (long "interactiveCEK" <> short 'k' <> help "Ejecutar interactivamente en la CEK")
   -- <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
   -- <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
-      <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
+      <|> flag Interactive Interactive (long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
       <|> flag Eval        Eval        (long "eval" <> short 'e' <> help "Evaluar programa")
   -- <|> flag' CC ( long "cc" <> short 'c' <> help "Compilar a código C")
   -- <|> flag' Canon ( long "canon" <> short 'n' <> help "Imprimir canonicalización")
@@ -57,12 +56,13 @@ parseMode = (,) <$>
   -- <|> flag' Build ( long "build" <> short 'b' <> help "Compilar")
       )
    <*> pure False
+   <*> flag False True (long "cek" <> short 'k' <> help "Utilizar la CEK")
    -- reemplazar por la siguiente línea para habilitar opción
    -- <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
-parseArgs :: Parser (Mode,Bool, [FilePath])
-parseArgs = (\(a,b) c -> (a,b,c)) <$> parseMode <*> many (argument str (metavar "FILES..."))
+parseArgs :: Parser (Mode,Bool,Bool, [FilePath])
+parseArgs = (\(a,b,b') c -> (a,b,b',c)) <$> parseMode <*> many (argument str (metavar "FILES..."))
 
 main :: IO ()
 main = execParser opts >>= go
@@ -72,13 +72,11 @@ main = execParser opts >>= go
      <> progDesc "Compilador de FD4"
      <> header "Compilador de FD4 de la materia Compiladores 2022" )
 
-    go :: (Mode,Bool,[FilePath]) -> IO ()
-    go (Interactive,opt,files) =
-              runOrFail (Conf opt Interactive) (runInputT defaultSettings (repl files))
-    go (InteractiveCEK,opt,files) =
-              runOrFail (Conf opt InteractiveCEK) (runInputT defaultSettings (repl files))
-    go (m,opt, files) =
-              runOrFail (Conf opt m) $ mapM_ compileFile files
+    go :: (Mode,Bool,Bool,[FilePath]) -> IO ()
+    go (Interactive,opt,cek,files) =
+              runOrFail (Conf opt cek Interactive) (runInputT defaultSettings (repl files))
+    go (m,opt,cek, files) =
+              runOrFail (Conf opt cek m) $ mapM_ compileFile files
 
 runOrFail :: Conf -> FD4 a -> IO a
 runOrFail c m = do
@@ -138,6 +136,12 @@ evalDecl (Decl p x e) =
      return $ Decl p x e'
 evalDecl (DeclTy p n t) = return $ DeclTy p n t
 
+evalDeclCek :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
+evalDeclCek (Decl p x e) = 
+  do e' <- evalCEK e
+     return $ Decl p x e'
+evalDeclCek (DeclTy p n t) = return $ DeclTy p n t
+
 handleDecl ::  MonadFD4 m => SDecl STerm -> m ()
 handleDecl d = do
         m <- getMode
@@ -147,14 +151,6 @@ handleDecl d = do
               case dd of
                 (Decl p x tt) -> do
                   te <- eval tt
-                  addDecl (Decl p x te)
-                (DeclTy p x ty) -> do
-                  addTy x ty
-          InteractiveCEK -> do
-              dd <- typecheckDecl d
-              case dd of
-                (Decl p x tt) -> do
-                  te <- cek tt
                   addDecl (Decl p x te)
                 (DeclTy p x ty) -> do
                   addTy x ty
