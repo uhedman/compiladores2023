@@ -35,7 +35,7 @@ data Frame =
   | FrBOpL Env BinaryOp TTerm
   | FrBOpR Val BinaryOp
   | FrPrint String
-  | FrLet Env Name TTerm
+  | FrLet Env TTerm
 
 type Kont = [Frame]
 
@@ -64,18 +64,17 @@ seek (Lam i x xty (Sc1 t)) env k =
   destroy (Clos (ClFun i env x xty t)) k
 seek (Fix i f fty x xty (Sc2 t)) env k = 
   destroy (Clos (ClFix i env f fty x xty t)) k
-seek (Let _ x _ s (Sc1 t)) env k = 
-  seek s env (FrLet env x t:k)
+seek (Let _ _ _ s (Sc1 t)) env k = 
+  seek s env (FrLet env t:k)
 
 val2string :: MonadFD4 m => Val -> m String
 val2string (Nat i n) = return $ show n
-val2string (Clos (ClFun i env x xty t)) = pp t
-val2string (Clos (ClFix i env f fty x xty t)) = pp t
+val2string t = pp (val2tterm t)
 
 val2tterm :: Val -> TTerm
 val2tterm (Nat i n) = Const i (CNat n)
-val2tterm (Clos (ClFun i env x xty t)) = Lam i x xty (close x t) -- sust en t
-val2tterm (Clos (ClFix i env f fty x xty t)) = Fix i f fty x xty (close2 f x t) -- sust en t
+val2tterm (Clos (ClFun i env x xty t)) = Lam i x xty (close x t)
+val2tterm (Clos (ClFix i env f fty x xty t)) = Fix i f fty x xty (close2 f x t)
 
 evalOp :: BinaryOp -> Val -> Val -> Val
 evalOp Add (Nat i n) (Nat i' n') = Nat i (n+n')
@@ -93,8 +92,8 @@ destroy (Nat i 0) (FrIfz env t e:k) = seek t env k
 destroy (Nat i np) (FrIfz env t e:k) = seek e env k
 destroy (Clos c) (FrApp env t:k) = seek t env (FrClos c:k)
 destroy v (FrClos (ClFun i env x xty t):k) = seek t (v:env) k
-destroy v (FrClos (ClFix i env f fty x xty t):k) = seek t (Clos (ClFix i env f fty x xty t):v:env) k
-destroy v (FrLet env x t:k) = seek t (v:env) k
+destroy v (FrClos (ClFix i env f fty x xty t):k) = seek t (v:Clos (ClFix i env f fty x xty t):env) k
+destroy v (FrLet env t:k) = seek t (v:env) k
 destroy v [] = return v
 destroy _ _ = failFD4 "Bad args in destroy"
 
