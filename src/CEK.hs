@@ -13,7 +13,7 @@ module CEK where
 import Lang
 import MonadFD4 ( MonadFD4, printFD4, failFD4, failPosFD4, lookupDecl )
 import Common ( Pos )
-import Subst ( close, close2, open, open2)
+import Subst ( close, close2 )
 import PPrint ( pp )
 
 data Val = 
@@ -60,12 +60,12 @@ seek (V (p,_) (Global n)) env k =
        Nothing -> failPosFD4 p  "Variable not found"
        Just v -> seek v env k
 seek (Const i (CNat n)) env k = destroy (Nat i n) k
-seek (Lam i x xty t) env k = 
-  destroy (Clos (ClFun i env x xty (open x t))) k
-seek (Fix i f fty x xty t) env k = 
-  destroy (Clos (ClFix i env f fty x xty (open2 f x t))) k
-seek (Let _ x _ s t) env k = 
-  seek s env (FrLet env x (open x t):k)
+seek (Lam i x xty (Sc1 t)) env k = 
+  destroy (Clos (ClFun i env x xty t)) k
+seek (Fix i f fty x xty (Sc2 t)) env k = 
+  destroy (Clos (ClFix i env f fty x xty t)) k
+seek (Let _ x _ s (Sc1 t)) env k = 
+  seek s env (FrLet env x t:k)
 
 val2string :: MonadFD4 m => Val -> m String
 val2string (Nat i n) = return $ show n
