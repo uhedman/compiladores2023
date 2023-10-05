@@ -36,6 +36,8 @@ import PPrint ( pp , ppTy, ppDecl )
 import MonadFD4
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
+import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
+import System.FilePath ( dropExtension )
 
 prompt :: String
 prompt = "FD4> "
@@ -46,8 +48,8 @@ prompt = "FD4> "
 parseMode :: Parser (Mode,Bool,Bool)
 parseMode = (,,) <$>
       (flag' Typecheck ( long "typecheck" <> short 't' <> help "Chequear tipos e imprimir el término")
-  -- <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
-  -- <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
+      <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
+      <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
       <|> flag Interactive Interactive (long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
       <|> flag Eval        Eval        (long "eval" <> short 'e' <> help "Evaluar programa")
   -- <|> flag' CC ( long "cc" <> short 'c' <> help "Compilar a código C")
@@ -75,6 +77,8 @@ main = execParser opts >>= go
     go :: (Mode,Bool,Bool,[FilePath]) -> IO ()
     go (Interactive,opt,cek,files) =
               runOrFail (Conf opt cek Interactive) (runInputT defaultSettings (repl files))
+    go (RunVM,opt,cek,files) =
+              runOrFail (Conf opt cek RunVM) $ mapM_ runVMFile files
     go (m,opt,cek, files) =
               runOrFail (Conf opt cek m) $ mapM_ compileFile files
 
@@ -115,6 +119,10 @@ loadFile f = do
                          return "")
     setLastFile filename
     parseIO filename program x
+
+runVMFile ::  MonadFD4 m => FilePath -> m ()
+runVMFile f = do bc <- liftIO $ bcRead f
+                 runBC bc
 
 compileFile ::  MonadFD4 m => FilePath -> m ()
 compileFile f = do
@@ -170,6 +178,12 @@ handleDecl d = do
               cek <- getCek
               ed <- if cek then evalDeclCek td else evalDecl td
               addDecl ed
+          Bytecompile -> do
+              f <- getLastFile
+              td <- typecheckDecl d
+              bc <- bytecompileModule [td]
+              liftIO $ bcWrite bc (dropExtension f ++ ".bc32") -- liftIO?
+          _ -> return ()
 
       where
         typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
