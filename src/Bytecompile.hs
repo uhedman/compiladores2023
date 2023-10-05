@@ -17,6 +17,7 @@ module Bytecompile
 
 import Lang
 import MonadFD4
+import Subst ( open, close )
 
 import qualified Data.ByteString.Lazy as BS
 import Data.Binary ( Word32, Binary(put, get), decode, encode )
@@ -30,6 +31,10 @@ type Opcode = Int
 type Bytecode = [Int]
 
 newtype Bytecode32 = BC { un32 :: [Word32] }
+data Val = 
+    N Int
+  | C ([Val], Bytecode)
+  | RA ([Val], Bytecode)
 
 {- Esta instancia explica como codificar y decodificar Bytecode de 32 bits -}
 instance Binary Bytecode32 where
@@ -99,7 +104,33 @@ showBC :: Bytecode -> String
 showBC = intercalate "; " . showOps
 
 bcc :: MonadFD4 m => TTerm -> m Bytecode
-bcc t = failFD4 "implementame!"
+bcc (V i (Bound n)) = return [ACCESS,n]
+bcc (V i (Free nm)) = failFD4 "implementame!"
+bcc (V i (Global nm)) = failFD4 "implementame!"
+bcc (Const i (CNat n)) = return [CONST,n]
+bcc (Lam i n t s) = failFD4 "implementame!"
+bcc (App i l r) = 
+  do l' <- bcc l
+     r' <- bcc r
+     return $ l'++r'++[CALL]
+bcc (Print i str t) = 
+  do t' <- bcc t
+     return $ [PRINT]++string2bc str++[NULL]++[PRINTN]++t'
+bcc (BinaryOp i Add l r) = 
+  do l' <- bcc l
+     r' <- bcc r
+     return $ l'++r'++[ADD]
+bcc (BinaryOp i Sub l r) = 
+  do l' <- bcc l
+     r' <- bcc r
+     return $ l'++r'++[SUB]
+bcc (Fix i f fty x xty s) = 
+  failFD4 "implementame!"
+bcc (IfZ i c t e) = failFD4 "implementame!"
+bcc (Let i x xty e1 e2) = 
+  do e1' <- bcc e1
+     e2' <- bcc (open x e2)
+     return $ e1'++[SHIFT]++e2'++[DROP]
 
 -- ord/chr devuelven los codepoints unicode, o en otras palabras
 -- la codificación UTF-32 del caracter.
@@ -109,8 +140,14 @@ string2bc = map ord
 bc2string :: Bytecode -> String
 bc2string = map chr
 
+translate :: [Decl TTerm] -> TTerm
+translate [] = error "Lista de declaraciones vacia"
+translate [Decl p n b] = b
+translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) b (close n (translate ds))
+translate _ = error "No se esperaba una declaracion de tipo"
+
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode
-bytecompileModule m = failFD4 "implementame!"
+bytecompileModule = bcc . translate
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo
 bcWrite :: Bytecode -> FilePath -> IO ()
@@ -124,5 +161,25 @@ bcWrite bs filename = BS.writeFile filename (encode $ BC $ fromIntegral <$> bs)
 bcRead :: FilePath -> IO Bytecode
 bcRead filename = (map fromIntegral <$> un32) . decode <$> BS.readFile filename
 
+nth :: (Eq t, Num t) => t -> [a] -> a
+nth 0 (x:_) = x
+nth n (_:xs) = nth (n-1) xs
+nth _ _ = error "Indice fuera de rango"
+
 runBC :: MonadFD4 m => Bytecode -> m ()
-runBC bc = failFD4 "implementame!"
+runBC bc = go (bc,[],[])
+  where go :: (Bytecode, [Val], [Val]) -> m ()
+        go (CONST:n:c, e, s) = go (c, e, N n:s)
+        go (ADD:c, e, N m:N n:s) = go (c, e, N (m+n):s)
+        go (SUB:c, e, N m:N n:s) = go (c, e, N (m-n):s)
+        go (ACCESS:i:c, e, m:n:s) = go (c, e, nth i e:s)
+        go (CALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, RA (e,c):s)
+        go (FUNCTION:n:c, e, s) = go (drop n c, e, C (e, take n c):s)
+        go (RETURN:_, _, v:RA (e,c):s) = go (c, e, v:s)
+        go (SHIFT:c, e, v:s) = go (c, v:e, s)
+        go (DROP:c, _:e, s) = go (c, e, s)
+        go (PRINTN:c, e, n:s) = do --liftIO $ print (show n)
+                                   go (c, e, n:s)
+        go (PRINT:c, e, n:s) = do --liftIO $ print (show n)
+                                  go (c, e, n:s)
+        go (_, _, _) = error "Patron no reconocido"
