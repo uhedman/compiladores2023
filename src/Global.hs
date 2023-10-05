@@ -23,7 +23,9 @@ data GlEnv = GlEnv {
 
 -- ^ Entorno de tipado de declaraciones globales
 tyEnv :: GlEnv ->  [(Name,Ty)]
-tyEnv g = map (\(Decl _ n b) -> (n, getTy b)) (glb g) ++ env g
+tyEnv g = map f (glb g) ++ env g
+  where f (Decl _ n b) = (n, getTy b)
+        f (DeclTy _ n ty) = (n, ty)
 
 {-
  Tipo para representar las banderas disponibles en línea de comando.
