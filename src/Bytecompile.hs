@@ -91,6 +91,7 @@ showOps (FUNCTION:i:xs)  = ("FUNCTION len=" ++ show i) : showOps xs
 showOps (CALL:xs)        = "CALL" : showOps xs
 showOps (ADD:xs)         = "ADD" : showOps xs
 showOps (SUB:xs)         = "SUB" : showOps xs
+showOps (IFZ:xs)         = "IFZ" : showOps xs
 showOps (FIX:xs)         = "FIX" : showOps xs
 showOps (STOP:xs)        = "STOP" : showOps xs
 showOps (JUMP:i:xs)      = ("JUMP off=" ++ show i) : showOps xs
@@ -112,7 +113,7 @@ bcc (V i (Global nm)) = failFD4 "Las variables globales deberian transformarse a
 bcc (Const i (CNat n)) = return [CONST,n]
 bcc (Lam i n t (Sc1 s)) = 
   do s' <- bcc s
-     return $ [FUNCTION, length s']++s'++[RETURN]
+     return $ [FUNCTION, length s' + 1]++s'++[RETURN]
 bcc (App i l r) = 
   do l' <- bcc l
      r' <- bcc r
@@ -130,12 +131,12 @@ bcc (BinaryOp i Sub l r) =
      return $ l'++r'++[SUB]
 bcc (Fix i f fty x xty (Sc2 s)) = 
   do s' <- bcc s
-     return $ [FUNCTION, length s'] ++ s' ++ [RETURN, FIX]
-bcc (IfZ i c t e) = -- usar JUMP?
+     return $ [FUNCTION, length s' + 1] ++ s' ++ [RETURN, FIX]
+bcc (IfZ i c t e) =
   do c' <- bcc c
-     t' <- bcc c
-     e' <- bcc c
-     return $ c' ++ [IFZ, length t'] ++ t' ++ [JUMP, length e'] ++ e'
+     t' <- bcc t
+     e' <- bcc e
+     return $ c' ++ [IFZ, length t'+2] ++ t' ++ [JUMP, length e'] ++ e'
 bcc (Let i x xty e1 (Sc1 e2)) = 
   do e1' <- bcc e1
      e2' <- bcc e2
@@ -183,20 +184,16 @@ bcWrite bs filename = BS.writeFile filename (encode $ BC $ fromIntegral <$> bs)
 bcRead :: FilePath -> IO Bytecode
 bcRead filename = (map fromIntegral <$> un32) . decode <$> BS.readFile filename
 
-nth :: (Eq t, Num t) => t -> [a] -> a
-nth 0 (x:_) = x
-nth n (_:xs) = nth (n-1) xs
-nth _ _ = error "Indice fuera de rango"
-
 runBC :: MonadFD4 m => Bytecode -> m ()
 runBC bc = go (bc, [], [])
   where go :: MonadFD4 m => (Bytecode, [Val], [Val]) -> m ()
         go (CONST:n:c, e, s) = go (c, e, N n:s)
         go (ADD:c, e, N m:N n:s) = go (c, e, N (m+n):s)
-        go (SUB:c, e, N m:N n:s) = go (c, e, N (m-n):s)
-        go (ACCESS:i:c, e, m:n:s) = go (c, e, nth i e:s)
+        go (SUB:c, e, N m:N n:s) = go (c, e, N (max (m-n) 0):s)
+        go (ACCESS:i:c, e, s) = go (c, e, e!!i:s)
         go (CALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, RA (e,c):s)
-        go (FUNCTION:n:c, e, s) = go (drop n c, e, C (e, take n c):s)
+        go (FUNCTION:n:c, e, s) = let (f,c') = splitAt n c
+                                  in go (c', e, C (e, f):s)
         go (RETURN:_, _, v:RA (e,c):s) = go (c, e, v:s)
         go (FIX:c, e, C (ef,cf):s) = let efix = C (efix, cf):ef
                                      in go (c, e, C (efix, cf):s)
@@ -206,10 +203,10 @@ runBC bc = go (bc, [], [])
         --                              go (c, e, N n:s)
         go (PRINT:c, e, N n:s) = do let (str,_:c') = span (/=NULL) c
                                     printFD4 $ bc2string str ++ show n
-                                    go (c', e, s)
-        go (IFZ:l:c, e, N n:s) = if l == 0
+                                    go (c', e, N n:s)
+        go (IFZ:l:c, e, N n:s) = if n == 0
                                  then go (c, e, s)
                                  else go (drop l c, e, s)
         go (JUMP:n:c, e, s) = go (drop n c, e, s)
         go (STOP:_, _, _) = return ()
-        go (c, _, _) = error $ "Patron no reconocido" ++ show c
+        go (c, _, _) = error $ "Patron no reconocido: " ++ showBC bc
