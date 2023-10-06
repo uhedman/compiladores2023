@@ -18,6 +18,7 @@ module Bytecompile
 
 import Lang
 import MonadFD4
+import Subst ( close )
 
 import qualified Data.ByteString.Lazy as BS
 import Data.Binary ( Word32, Binary(put, get), decode, encode )
@@ -70,6 +71,7 @@ pattern FUNCTION = 4
 pattern CALL     = 5
 pattern ADD      = 6
 pattern SUB      = 7
+pattern IFZ      = 8
 pattern FIX      = 9
 pattern STOP     = 10
 pattern SHIFT    = 11
@@ -133,10 +135,7 @@ bcc (IfZ i c t e) = -- usar JUMP?
   do c' <- bcc c
      t' <- bcc c
      e' <- bcc c
-     case c' of
-       [0] -> return t'
-       [n] -> return e'
-       res -> failFD4 "Resultado inesperado" 
+     return $ c' ++ [IFZ, length t'] ++ t' ++ [JUMP, length e'] ++ e'
 bcc (Let i x xty e1 (Sc1 e2)) = 
   do e1' <- bcc e1
      e2' <- bcc e2
@@ -150,10 +149,22 @@ string2bc = map ord
 bc2string :: Bytecode -> String
 bc2string = map chr
 
+glob2free :: TTerm -> TTerm
+glob2free (V p (Global n)) = V p (Free n)
+glob2free c@(Const _ _) = c
+glob2free (Lam i x xty (Sc1 t)) = Lam i x xty (Sc1 (glob2free t))
+glob2free (App i l r) = App i (glob2free l) (glob2free r)
+glob2free (Print i s t) = Print i s (glob2free t)
+glob2free (BinaryOp i op l r) = BinaryOp i op (glob2free l) (glob2free r)
+glob2free (Fix i f fty x xty (Sc2 t)) = Fix i f fty x xty (Sc2 (glob2free t))
+glob2free (IfZ i c t e) = IfZ i (glob2free c) (glob2free t) (glob2free e)
+glob2free (Let i x xty def (Sc1 t)) = Let i x xty (glob2free def) (Sc1 (glob2free t))
+glob2free t = t
+
 translate :: [Decl TTerm] -> TTerm
 translate [] = error "Lista de declaraciones vacia"
-translate [Decl p n b] = b
-translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) b (Sc1 (translate ds))
+translate [Decl p n b] = glob2free b
+translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n (translate ds))
 translate _ = error "No se esperaba una declaracion de tipo"
 
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode
@@ -193,10 +204,12 @@ runBC bc = go (bc, [], [])
         go (DROP:c, _:e, s) = go (c, e, s)
         -- go (PRINTN:c, e, N n:s) = do printFD4 (show n)
         --                              go (c, e, N n:s)
-        go (PRINT:c, e, N n:s) = do let str = takeWhile (/= NULL) c
-                                    let c' = tail $ dropWhile (/= NULL) c
+        go (PRINT:c, e, N n:s) = do let (str,_:c') = span (/=NULL) c
                                     printFD4 $ bc2string str ++ show n
                                     go (c', e, s)
+        go (IFZ:l:c, e, N n:s) = if l == 0
+                                 then go (c, e, s)
+                                 else go (drop l c, e, s)
         go (JUMP:n:c, e, s) = go (drop n c, e, s)
         go (STOP:_, _, _) = return ()
         go (c, _, _) = error $ "Patron no reconocido" ++ show c

@@ -77,6 +77,8 @@ main = execParser opts >>= go
     go :: (Mode,Bool,Bool,[FilePath]) -> IO ()
     go (Interactive,opt,cek,files) =
               runOrFail (Conf opt cek Interactive) (runInputT defaultSettings (repl files))
+    go (Bytecompile,opt,cek,files) =
+              runOrFail (Conf opt cek RunVM) $ mapM_ bytecompileFile files
     go (RunVM,opt,cek,files) =
               runOrFail (Conf opt cek RunVM) $ mapM_ runVMFile files
     go (m,opt,cek, files) =
@@ -124,6 +126,16 @@ runVMFile ::  MonadFD4 m => FilePath -> m ()
 runVMFile f = do bc <- liftIO $ bcRead f
                  runBC bc
 
+bytecompileFile :: MonadFD4 m => FilePath -> m ()
+bytecompileFile f = do
+  decls <- loadFile f
+  tds <- mapM aux decls
+  bc <- bytecompileModule tds
+  liftIO $ bcWrite bc (dropExtension f ++ ".bc32") -- liftIO?
+    where aux d = do td <- typecheckDecl d
+                     addDecl td
+                     return td
+
 compileFile ::  MonadFD4 m => FilePath -> m ()
 compileFile f = do
     i <- getInter
@@ -149,6 +161,11 @@ evalDeclCek (Decl p x e) =
   do e' <- evalCEK e
      return $ Decl p x e'
 evalDeclCek (DeclTy p n t) = return $ DeclTy p n t
+
+typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
+typecheckDecl decl = 
+  do decl' <- elabDecl decl
+     tcDecl decl' 
 
 handleDecl ::  MonadFD4 m => SDecl STerm -> m ()
 handleDecl d = do
@@ -178,20 +195,7 @@ handleDecl d = do
               cek <- getCek
               ed <- if cek then evalDeclCek td else evalDecl td
               addDecl ed
-          Bytecompile -> do
-              f <- getLastFile
-              td <- typecheckDecl d
-              bc <- bytecompileModule [td]
-              liftIO $ bcWrite bc (dropExtension f ++ ".bc32") -- liftIO?
           _ -> return ()
-
-      where
-        typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
-        typecheckDecl decl = 
-          do decl' <- elabDecl decl
-             tcDecl decl' 
-
-
 
 data Command = Compile CompileForm
              | PPrint String
