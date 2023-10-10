@@ -107,37 +107,37 @@ showBC :: Bytecode -> String
 showBC = intercalate "; " . showOps
 
 bcc :: MonadFD4 m => TTerm -> m Bytecode
-bcc (V i (Bound n)) = return [ACCESS,n]
-bcc (V i (Free nm)) = failFD4 "Las variables libres deberian transformarse a indices de de Bruijn"
-bcc (V i (Global nm)) = failFD4 "Las variables globales deberian transformarse a indices de de Bruijn"
-bcc (Const i (CNat n)) = return [CONST,n]
-bcc (Lam i n t (Sc1 s)) = 
+bcc (V _ (Bound n)) = return [ACCESS,n]
+bcc (V _ (Free nm)) = failFD4 "Las variables libres deberian transformarse a indices de de Bruijn"
+bcc (V _ (Global nm)) = failFD4 "Las variables globales deberian transformarse a indices de de Bruijn"
+bcc (Const _ (CNat n)) = return [CONST,n]
+bcc (Lam _ _ _ (Sc1 s)) = 
   do s' <- bcc s
      return $ [FUNCTION, length s' + 1]++s'++[RETURN]
-bcc (App i l r) = 
+bcc (App _ l r) = 
   do l' <- bcc l
      r' <- bcc r
      return $ l'++r'++[CALL]
-bcc (Print i str t) = 
+bcc (Print _ str t) = 
   do t' <- bcc t
      return $ t'++[PRINT]++string2bc str++[NULL]
-bcc (BinaryOp i Add l r) = 
+bcc (BinaryOp _ Add l r) = 
   do l' <- bcc l
      r' <- bcc r
      return $ l'++r'++[ADD]
-bcc (BinaryOp i Sub l r) = 
+bcc (BinaryOp _ Sub l r) = 
   do l' <- bcc l
      r' <- bcc r
      return $ l'++r'++[SUB]
-bcc (Fix i f fty x xty (Sc2 s)) = 
+bcc (Fix _ _ _ _ _ (Sc2 s)) = 
   do s' <- bcc s
      return $ [FUNCTION, length s' + 1] ++ s' ++ [RETURN, FIX]
-bcc (IfZ i c t e) =
+bcc (IfZ _ c t e) =
   do c' <- bcc c
      t' <- bcc t
      e' <- bcc e
      return $ c' ++ [IFZ, length t'+2] ++ t' ++ [JUMP, length e'] ++ e'
-bcc (Let i x xty e1 (Sc1 e2)) = 
+bcc (Let _ _ _ e1 (Sc1 e2)) = 
   do e1' <- bcc e1
      e2' <- bcc e2
      return $ e1'++[SHIFT]++e2'++[DROP]
@@ -164,9 +164,9 @@ glob2free t = t
 
 translate :: [Decl TTerm] -> TTerm
 translate [] = error "Lista de declaraciones vacia"
-translate [Decl p n b] = glob2free b
+translate [Decl p _ b] = glob2free b
 translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n (translate ds))
-translate _ = error "No se esperaba una declaracion de tipo"
+translate (DeclTy _ _ b:ds) = translate ds
 
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode
 bytecompileModule m = do bc <- (bcc . translate) m
@@ -209,4 +209,4 @@ runBC bc = go (bc, [], [])
                                  else go (drop l c, e, s)
         go (JUMP:n:c, e, s) = go (drop n c, e, s)
         go (STOP:_, _, _) = return ()
-        go (c, _, _) = error $ "Patron no reconocido: " ++ showBC bc
+        go (c, _, _) = error $ "Patron no reconocido: " ++ showBC c
