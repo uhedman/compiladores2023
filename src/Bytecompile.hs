@@ -189,7 +189,7 @@ runBC bc = go (bc, [], [])
   where go :: MonadFD4 m => (Bytecode, [Val], [Val]) -> m ()
         go (CONST:n:c, e, s) = go (c, e, N n:s)
         go (ADD:c, e, N m:N n:s) = go (c, e, N (m+n):s)
-        go (SUB:c, e, N m:N n:s) = go (c, e, N (max (m-n) 0):s)
+        go (SUB:c, e, N m:N n:s) = go (c, e, N (max (n-m) 0):s)
         go (ACCESS:i:c, e, s) = go (c, e, e!!i:s)
         go (CALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, RA (e,c):s)
         go (FUNCTION:n:c, e, s) = let (f,c') = splitAt n c
