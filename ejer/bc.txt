@@ -1,0 +1,12 @@
+Calculando ack 3 11 compilado en C el tiempo nos dio
+real 0m0.710s
+user 0m0.707s
+sys  0m0.000s
+
+Calculando ack 3 11 en la macchina el tiempo nos dio
+real 9m34.801s
+user 9m5.376s
+sys  0m18.292s
+
+Creemos que la gran diferencia de tiempo se debe a usar
+listas para el salto de las llamadas
