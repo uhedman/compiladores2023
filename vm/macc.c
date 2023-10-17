@@ -29,7 +29,7 @@ enum {
 	CALL     = 5,
 	ADD      = 6,
 	SUB      = 7,
-	CJUMP    = 8,
+	IFZ      = 8,
 	FIX      = 9,
 	STOP     = 10,
 	SHIFT    = 11,
@@ -105,6 +105,13 @@ static inline env env_push(env e, value v)
 	return new;
 }
 
+static inline env env_pop(env e)
+{
+	e = e->next;
+	if (!e) quit("out of stack");
+	return e;
+}
+
 /*
  * Sólo para debugging: devuelve la longitud de un entorno.
  */
@@ -116,6 +123,16 @@ static int env_len(env e)
 		rc++;
 	}
 	return rc;
+}
+
+static value env_nth(env e, int n)
+{
+	while (e && n) {
+		e = e->next;
+		n--;
+	}
+	if (!e) quit("out of stack");
+	return e->v;
 }
 
 void run(code init_c)
@@ -194,8 +211,9 @@ void run(code init_c)
 		/* Consumimos un opcode y lo inspeccionamos. */
 		switch(*c++) {
 		case ACCESS: {
-			/* implementame */
-			abort();
+			/* Una variable: la leemos del entorno y la ponemos en la pila */
+			(*s++) = env_nth(e, *c++);
+			break;
 		}
 
 		case CONST: {
@@ -268,8 +286,20 @@ void run(code init_c)
 		}
 
 		case TAILCALL: {
-			/* implementame */
-			abort();
+			/* 
+			 * Llamada de cola: tenemos en la pila un valor
+			 * y una función. La función debe ser una clausura.
+			 */
+			value val = *--s;
+			value fun = *--s;
+
+			/* Cambiamos al entorno de la clausura, agregando val */
+			e = env_push(fun.clo.clo_env, val);
+
+			/* Saltamos! */
+			c = fun.clo.clo_body;
+
+			break;
 		}
 
 		case FUNCTION: {
@@ -300,6 +330,27 @@ void run(code init_c)
 			break;
 		}
 
+		case IFZ: {
+			value val = *--s;
+			value len = *--s;
+
+			if (val.i != 0) {
+				/* Saltar */
+				c += len.i; 
+			}
+			
+			break;
+		}
+
+		case JUMP: {
+			uint32_t len = *c++;
+			
+			/* Saltar */
+			c += len; 
+
+			break;
+		}
+
 		case FIX: {
 			/*
 			 * Fixpoint: algo de magia. Tenemos una clausura en
@@ -325,12 +376,14 @@ void run(code init_c)
 		}
 
 		case SHIFT: {
-			/* implementame */
-			abort();
+			/* Pasamos una variable de la pila al entorno */
+			e = env_push(e, *--s);
+			break;
 		}
 
 		case DROP: {
-			/* implementame */
+			/* Popeamos un elemento del entorno */
+			e = env_pop(e);
 			abort();
 		}
 
