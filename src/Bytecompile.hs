@@ -108,13 +108,20 @@ showOps (x:xs)           = show x : showOps xs
 showBC :: Bytecode -> String
 showBC = intercalate "; " . showOps
 
+bct :: MonadFD4 m => TTerm -> m Bytecode
+bct (App _ l r) = 
+  do l' <- bcc l
+     r' <- bcc r
+     return $ l'++r'++[TAILCALL]
+bct t = bcc t
+
 bcc :: MonadFD4 m => TTerm -> m Bytecode
 bcc (V _ (Bound n)) = return [ACCESS,n]
 bcc (V _ (Free nm)) = failFD4 "Las variables libres deberian transformarse a indices de de Bruijn"
 bcc (V _ (Global nm)) = failFD4 "Las variables globales deberian transformarse a indices de de Bruijn"
 bcc (Const _ (CNat n)) = return [CONST,n]
 bcc (Lam _ _ _ (Sc1 s)) = 
-  do s' <- bcc s
+  do s' <- bct s
      return $ [FUNCTION, length s' + 1]++s'++[RETURN]
 bcc (App _ l r) = 
   do l' <- bcc l
