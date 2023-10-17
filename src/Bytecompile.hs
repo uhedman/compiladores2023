@@ -79,6 +79,7 @@ pattern DROP     = 12
 pattern PRINT    = 13
 pattern PRINTN   = 14
 pattern JUMP     = 15
+pattern TAILCALL = 16
 
 --función util para debugging: muestra el Bytecode de forma más legible.
 showOps :: Bytecode -> [String]
@@ -89,6 +90,7 @@ showOps (CONST:i:xs)     = ("CONST " ++  show i) : showOps xs
 showOps (ACCESS:i:xs)    = ("ACCESS " ++ show i) : showOps xs
 showOps (FUNCTION:i:xs)  = ("FUNCTION len=" ++ show i) : showOps xs
 showOps (CALL:xs)        = "CALL" : showOps xs
+showOps (TAILCALL:xs)    = "TAILCALL" : showOps xs
 showOps (ADD:xs)         = "ADD" : showOps xs
 showOps (SUB:xs)         = "SUB" : showOps xs
 showOps (IFZ:xs)         = "IFZ" : showOps xs
@@ -192,6 +194,7 @@ runBC bc = go (bc, [], [])
         go (SUB:c, e, N m:N n:s) = go (c, e, N (max (n-m) 0):s)
         go (ACCESS:i:c, e, s) = go (c, e, e!!i:s)
         go (CALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, RA (e,c):s)
+        go (TAILCALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, s)
         go (FUNCTION:n:c, e, s) = let (f,c') = splitAt n c
                                   in go (c', e, C (e, f):s)
         go (RETURN:_, _, v:RA (e,c):s) = go (c, e, v:s)
