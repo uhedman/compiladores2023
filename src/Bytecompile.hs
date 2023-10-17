@@ -177,9 +177,18 @@ translate [Decl p _ b] = glob2free b
 translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n (translate ds))
 translate (DeclTy _ _ b:ds) = translate ds
 
+drops2stop :: Bytecode -> Bytecode
+drops2stop [] = [STOP]
+drops2stop (DROP:c) = if null $ dropWhile (==DROP) c
+                      then [STOP]
+                      else let (l, r) = span (/=DROP) c
+                           in [DROP] ++ l ++ drops2stop r
+drops2stop c = let (a,b) = span (/=DROP) c
+               in a ++ drops2stop b
+
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode
 bytecompileModule m = do bc <- (bcc . translate) m
-                         return $ bc ++ [STOP]
+                         return $ drops2stop bc
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo
 bcWrite :: Bytecode -> FilePath -> IO ()
