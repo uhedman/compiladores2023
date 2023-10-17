@@ -129,7 +129,7 @@ bcc (App _ l r) =
      return $ l'++r'++[CALL]
 bcc (Print _ str t) = 
   do t' <- bcc t
-     return $ t'++[PRINT]++string2bc str++[NULL]
+     return $ t'++[PRINT]++string2bc str++[NULL]++[PRINTN]
 bcc (BinaryOp _ Add l r) = 
   do l' <- bcc l
      r' <- bcc r
@@ -209,11 +209,11 @@ runBC bc = go (bc, [], [])
                                      in go (c, e, C (efix, cf):s)
         go (SHIFT:c, e, v:s) = go (c, v:e, s)
         go (DROP:c, _:e, s) = go (c, e, s)
-        -- go (PRINTN:c, e, N n:s) = do printFD4 (show n)
-        --                              go (c, e, N n:s)
-        go (PRINT:c, e, N n:s) = do let (str,_:c') = span (/=NULL) c
-                                    printFD4 $ bc2string str ++ show n
-                                    go (c', e, N n:s)
+        go (PRINTN:c, e, N n:s) = do printFD4 (show n)
+                                     go (c, e, N n:s)
+        go (PRINT:c, e, s) = do let (str,_:c') = span (/=NULL) c
+                                printStrFD4 $ bc2string str
+                                go (c', e, s)
         go (IFZ:l:c, e, N n:s) = if n == 0
                                  then go (c, e, s)
                                  else go (drop l c, e, s)
