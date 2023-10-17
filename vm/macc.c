@@ -107,8 +107,8 @@ static inline env env_push(env e, value v)
 
 static inline env env_pop(env e)
 {
-	e = e->next;
 	if (!e) quit("out of stack");
+	e = e->next;
 	return e;
 }
 
@@ -332,13 +332,13 @@ void run(code init_c)
 
 		case IFZ: {
 			value val = *--s;
-			value len = *--s;
+			uint32_t len = *c++;
 
 			if (val.i != 0) {
 				/* Saltar */
-				c += len.i; 
+				c += len; 
 			}
-			
+
 			break;
 		}
 
@@ -384,7 +384,7 @@ void run(code init_c)
 		case DROP: {
 			/* Popeamos un elemento del entorno */
 			e = env_pop(e);
-			abort();
+			break;
 		}
 
 		case PRINTN: {
