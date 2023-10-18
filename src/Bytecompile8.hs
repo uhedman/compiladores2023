@@ -173,9 +173,9 @@ int2word n = let a = fromIntegral $ shiftR n 24
              in [a,b,c,d]
 
 word2int :: Bytecode -> Int
-word2int [a,b,c,d] = let a' = fromIntegral $ shiftL a 24
-                         b' = fromIntegral $ shiftL b 16
-                         c' = fromIntegral $ shiftL c 8
+word2int [a,b,c,d] = let a' = shiftL (fromIntegral a) 24
+                         b' = shiftL (fromIntegral b) 16
+                         c' = shiftL (fromIntegral c) 8
                          d' = fromIntegral d
                      in a'+b'+c'+d'
 word2int _ = error "Entero sin tamaño 32"
