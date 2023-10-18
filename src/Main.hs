@@ -284,7 +284,8 @@ handleTerm t = do
          t' <- elab t
          s <- get
          tt <- tc t' (tyEnv s)
-         te <- eval tt
+         cek <- getCek
+         te <- if cek then evalCEK tt else eval tt
          ppte <- pp te
          printFD4 (ppte ++ " : " ++ ppTy (getTy tt))
 
