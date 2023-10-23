@@ -108,6 +108,13 @@ showOps (x:xs)           = show x : showOps xs
 showBC :: Bytecode -> String
 showBC = intercalate "; " . showOps
 
+bcd :: MonadFD4 m => TTerm -> m Bytecode
+bcd (Let _ _ _ e1 (Sc1 e2)) = 
+  do e1' <- bcd e1
+     e2' <- bcc e2
+     return $ e1'++[SHIFT]++e2'++[DROP]
+bcd t = bcc t
+
 bct :: MonadFD4 m => TTerm -> m Bytecode
 bct (App _ l r) = 
   do l' <- bcc l
@@ -124,18 +131,18 @@ bcc (Lam _ _ _ (Sc1 s)) =
   do s' <- bct s
      return $ [FUNCTION, length s' + 1]++s'++[RETURN]
 bcc (App _ l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[CALL]
 bcc (Print _ str t) = 
   do t' <- bcc t
      return $ t'++[PRINT]++string2bc str++[NULL]++[PRINTN]
 bcc (BinaryOp _ Add l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[ADD]
 bcc (BinaryOp _ Sub l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[SUB]
 bcc (Fix _ _ _ _ _ (Sc2 s)) = 
@@ -149,7 +156,7 @@ bcc (IfZ _ c t e) =
 bcc (Let _ _ _ e1 (Sc1 e2)) = 
   do e1' <- bcc e1
      e2' <- bcc e2
-     return $ e1'++[SHIFT]++e2'++[DROP]
+     return $ e1'++[SHIFT]++e2'
 
 -- ord/chr devuelven los codepoints unicode, o en otras palabras
 -- la codificación UTF-32 del caracter.
@@ -177,18 +184,9 @@ translate [Decl p _ b] = glob2free b
 translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n (translate ds))
 translate (DeclTy _ _ b:ds) = translate ds
 
-drops2stop :: Bytecode -> Bytecode
-drops2stop [] = [STOP]
-drops2stop (DROP:c) = if null $ dropWhile (==DROP) c
-                      then [STOP]
-                      else let (l, r) = span (/=DROP) c
-                           in [DROP] ++ l ++ drops2stop r
-drops2stop c = let (a,b) = span (/=DROP) c
-               in a ++ drops2stop b
-
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode
 bytecompileModule m = do bc <- (bcc . translate) m
-                         return $ drops2stop bc
+                         return $ bc ++ [STOP]
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo
 bcWrite :: Bytecode -> FilePath -> IO ()
