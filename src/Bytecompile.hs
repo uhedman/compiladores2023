@@ -110,7 +110,7 @@ showBC = intercalate "; " . showOps
 
 bcd :: MonadFD4 m => TTerm -> m Bytecode
 bcd (Let _ _ _ e1 (Sc1 e2)) = 
-  do e1' <- bcd e1
+  do e1' <- bcc e1
      e2' <- bcc e2
      return $ e1'++[SHIFT]++e2'++[DROP]
 bcd t = bcc t
