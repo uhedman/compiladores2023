@@ -117,7 +117,7 @@ bcd t = bcc t
 
 bct :: MonadFD4 m => TTerm -> m Bytecode
 bct (App _ l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[TAILCALL]
 bct t = bcc t
@@ -149,7 +149,7 @@ bcc (Fix _ _ _ _ _ (Sc2 s)) =
   do s' <- bcc s
      return $ [FUNCTION, length s' + 1] ++ s' ++ [RETURN, FIX]
 bcc (IfZ _ c t e) =
-  do c' <- bcc c
+  do c' <- bcd c
      t' <- bcc t
      e' <- bcc e
      return $ c' ++ [IFZ, length t'+2] ++ t' ++ [JUMP, length e'] ++ e'
