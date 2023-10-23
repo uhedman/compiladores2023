@@ -408,9 +408,9 @@ void run(code init_c)
 		}
 
 		case PRINT: {
-			char wc;
+			wchar_t wc;
 			while ((wc = *c++))
-				putchar(wc);
+				putwchar(wc);
 
 			break;
 		}
