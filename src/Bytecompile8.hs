@@ -114,9 +114,16 @@ showOps (x:xs)           = show x : showOps xs
 showBC :: Bytecode -> String
 showBC = intercalate "; " . showOps
 
+bcd :: MonadFD4 m => TTerm -> m Bytecode
+bcd (Let _ _ _ e1 (Sc1 e2)) = 
+  do e1' <- bcd e1
+     e2' <- bcc e2
+     return $ e1'++[SHIFT]++e2'++[DROP]
+bcd t = bcc t
+
 bct :: MonadFD4 m => TTerm -> m Bytecode
 bct (App _ l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[TAILCALL]
 bct t = bcc t
@@ -130,25 +137,25 @@ bcc (Lam _ _ _ (Sc1 s)) =
   do s' <- bct s
      return $ [FUNCTION]++int2word (length s' + 1)++s'++[RETURN]
 bcc (App _ l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[CALL]
 bcc (Print _ str t) = 
   do t' <- bcc t
      return $ t'++[PRINT]++string2bc str++[NULL]++[PRINTN]
 bcc (BinaryOp _ Add l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[ADD]
 bcc (BinaryOp _ Sub l r) = 
-  do l' <- bcc l
+  do l' <- bcd l
      r' <- bcc r
      return $ l'++r'++[SUB]
 bcc (Fix _ _ _ _ _ (Sc2 s)) = 
   do s' <- bcc s
      return $ [FUNCTION]++int2word (length s' + 1)++s'++[RETURN, FIX]
 bcc (IfZ _ c t e) =
-  do c' <- bcc c
+  do c' <- bcd c
      t' <- bcc t
      e' <- bcc e
      return $ c' ++ [IFZ]++int2word (length t' + 5)++t'++[JUMP]++int2word (length e')++e'
