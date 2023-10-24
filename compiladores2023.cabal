@@ -36,6 +36,7 @@ executable compiladores2023
         Global
         Lang
         MonadFD4
+        Optimize
         PPrint
         Parse
         Subst

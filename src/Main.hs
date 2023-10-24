@@ -37,6 +37,7 @@ import MonadFD4
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
 import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
+import Optimize ( optimizeDecl )
 import System.FilePath ( dropExtension )
 
 prompt :: String
@@ -57,10 +58,8 @@ parseMode = (,,) <$>
   -- <|> flag' Assembler ( long "assembler" <> short 'a' <> help "Imprimir Assembler resultante")
   -- <|> flag' Build ( long "build" <> short 'b' <> help "Compilar")
       )
-   <*> pure False
+   <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
    <*> flag False True (long "cek" <> short 'k' <> help "Utilizar la CEK")
-   -- reemplazar por la siguiente línea para habilitar opción
-   -- <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
 parseArgs :: Parser (Mode,Bool,Bool, [FilePath])
@@ -154,13 +153,13 @@ evalDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
 evalDecl (Decl p x e) = 
   do e' <- eval e
      return $ Decl p x e'
-evalDecl (DeclTy p n t) = return $ DeclTy p n t
+evalDecl d = return d
 
 evalDeclCek :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
 evalDeclCek (Decl p x e) = 
   do e' <- evalCEK e
      return $ Decl p x e'
-evalDeclCek (DeclTy p n t) = return $ DeclTy p n t
+evalDeclCek d = return d
 
 typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
 typecheckDecl decl = 
@@ -185,15 +184,16 @@ handleDecl d = do
               printFD4 ("Chequeando tipos de "++f)
               td <- typecheckDecl d
               addDecl td
-              -- opt <- getOpt
-              -- td' <- if opt then optimize td else td
-              ppterm <- ppDecl td  --td'
+              opt <- getOpt
+              td' <- if opt then optimizeDecl td else return td
+              ppterm <- ppDecl td'
               printFD4 ppterm
           Eval -> do
               td <- typecheckDecl d
-              -- td' <- if opt then optimizeDecl td else return td
+              opt <- getOpt
+              td' <- if opt then optimizeDecl td else return td
               cek <- getCek
-              ed <- if cek then evalDeclCek td else evalDecl td
+              ed <- if cek then evalDeclCek td' else evalDecl td'
               addDecl ed
           _ -> return ()
 
