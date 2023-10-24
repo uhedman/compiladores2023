@@ -108,55 +108,62 @@ showOps (x:xs)           = show x : showOps xs
 showBC :: Bytecode -> String
 showBC = intercalate "; " . showOps
 
-bcd :: MonadFD4 m => TTerm -> m Bytecode
-bcd (Let _ _ _ e1 (Sc1 e2)) = 
-  do e1' <- bcc e1
-     e2' <- bcc e2
-     return $ e1'++[SHIFT]++e2'++[DROP]
-bcd t = bcc t
+bcd :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
+bcd ms (Let _ nm _ e1 (Sc1 e2)) =
+  do e1' <- bcc ms e1
+     case nm of
+       "_" -> do e2' <- bcc (1:ms) e2 
+                 return $ e1'++[SHIFT,DROP]++e2'
+       _ -> do e2' <- bcc (0:ms) e2
+               return $ e1'++[SHIFT]++e2'++[DROP]
+bcd ms t = bcc ms t
 
-bct :: MonadFD4 m => TTerm -> m Bytecode
-bct (App _ l r) = 
-  do l' <- bcd l
-     r' <- bcc r
+bct :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
+bct ms (App _ l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
      return $ l'++r'++[TAILCALL]
-bct t = bcc t
+bct ms t = bcc ms t
 
-bcc :: MonadFD4 m => TTerm -> m Bytecode
-bcc (V _ (Bound n)) = return [ACCESS,n]
-bcc (V _ (Free nm)) = failFD4 "Las variables libres deberian transformarse a indices de de Bruijn"
-bcc (V _ (Global nm)) = failFD4 "Las variables globales deberian transformarse a indices de de Bruijn"
-bcc (Const _ (CNat n)) = return [CONST,n]
-bcc (Lam _ _ _ (Sc1 s)) = 
-  do s' <- bct s
+bcc :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
+bcc ms (V _ (Bound n)) = let m = sum (take n ms)
+                         in return [ACCESS,n-m]
+bcc _ (V _ (Free nm)) = failFD4 "Las variables libres deberian transformarse a indices de de Bruijn"
+bcc _ (V _ (Global nm)) = failFD4 "Las variables globales deberian transformarse a indices de de Bruijn"
+bcc _ (Const _ (CNat n)) = return [CONST,n]
+bcc ms (Lam _ _ _ (Sc1 s)) = 
+  do s' <- bct ms s
      return $ [FUNCTION, length s' + 1]++s'++[RETURN]
-bcc (App _ l r) = 
-  do l' <- bcd l
-     r' <- bcc r
+bcc ms (App _ l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
      return $ l'++r'++[CALL]
-bcc (Print _ str t) = 
-  do t' <- bcc t
+bcc ms (Print _ str t) = 
+  do t' <- bcc ms t
      return $ t'++[PRINT]++string2bc str++[NULL]++[PRINTN]
-bcc (BinaryOp _ Add l r) = 
-  do l' <- bcd l
-     r' <- bcc r
+bcc ms (BinaryOp _ Add l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
      return $ l'++r'++[ADD]
-bcc (BinaryOp _ Sub l r) = 
-  do l' <- bcd l
-     r' <- bcc r
+bcc ms (BinaryOp _ Sub l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
      return $ l'++r'++[SUB]
-bcc (Fix _ _ _ _ _ (Sc2 s)) = 
-  do s' <- bcc s
+bcc ms (Fix _ _ _ _ _ (Sc2 s)) = 
+  do s' <- bcc ms s
      return $ [FUNCTION, length s' + 1] ++ s' ++ [RETURN, FIX]
-bcc (IfZ _ c t e) =
-  do c' <- bcd c
-     t' <- bcc t
-     e' <- bcc e
+bcc ms (IfZ _ c t e) =
+  do c' <- bcd ms c
+     t' <- bcc ms t
+     e' <- bcc ms e
      return $ c' ++ [IFZ, length t'+2] ++ t' ++ [JUMP, length e'] ++ e'
-bcc (Let _ _ _ e1 (Sc1 e2)) = 
-  do e1' <- bcc e1
-     e2' <- bcc e2
-     return $ e1'++[SHIFT]++e2'
+bcc ms (Let _ nm _ e1 (Sc1 e2)) = 
+  do e1' <- bcc ms e1
+     case nm of
+       "_" -> do e2' <- bcc (1:ms) e2 
+                 return $ e1'++[SHIFT,DROP]++e2'
+       _ -> do e2' <- bcc (0:ms) e2
+               return $ e1'++[SHIFT]++e2'
 
 -- ord/chr devuelven los codepoints unicode, o en otras palabras
 -- la codificación UTF-32 del caracter.
@@ -185,7 +192,8 @@ translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n 
 translate (DeclTy _ _ b:ds) = translate ds
 
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode
-bytecompileModule m = do bc <- (bcc . translate) m
+bytecompileModule m = do bc <- (bcc [] . translate) m
+                         --error $ showBC bc
                          return $ bc ++ [STOP]
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo
