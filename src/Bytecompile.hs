@@ -135,7 +135,8 @@ bct ms (Let _ nm _ e1 (Sc1 e2)) =
                  return $ e1'++[SHIFT,DROP]++e2'
        _ -> do e2' <- bct (0:ms) e2
                return $ e1'++[SHIFT]++e2'
-bct ms t = bcc ms t
+bct ms t = do t' <- bcc ms t
+              return $ t'++[RETURN]
 
 bcc :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
 bcc ms (V _ (Bound n)) = let m = sum (take n ms)
@@ -145,7 +146,7 @@ bcc _ (V _ (Global nm)) = failFD4 "Las variables globales deberian transformarse
 bcc _ (Const _ (CNat n)) = return [CONST,n]
 bcc ms (Lam _ _ _ (Sc1 s)) = 
   do s' <- bct ms s
-     return $ [FUNCTION, length s' + 1]++s'++[RETURN]
+     return $ [FUNCTION, length s']++s'
 bcc ms (App _ l r) = 
   do l' <- bcd ms l
      r' <- bcc ms r
