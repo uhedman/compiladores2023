@@ -123,6 +123,18 @@ bct ms (App _ l r) =
   do l' <- bcd ms l
      r' <- bcc ms r
      return $ l'++r'++[TAILCALL]
+bct ms (IfZ _ c t e) =
+  do c' <- bcd ms c
+     t' <- bct ms t
+     e' <- bct ms e
+     return $ c' ++ [IFZ, length t'+2] ++ t' ++ [JUMP, length e'] ++ e'
+bct ms (Let _ nm _ e1 (Sc1 e2)) = 
+  do e1' <- bcc ms e1
+     case nm of
+       "_" -> do e2' <- bct (1:ms) e2 
+                 return $ e1'++[SHIFT,DROP]++e2'
+       _ -> do e2' <- bct (0:ms) e2
+               return $ e1'++[SHIFT]++e2'
 bct ms t = bcc ms t
 
 bcc :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
