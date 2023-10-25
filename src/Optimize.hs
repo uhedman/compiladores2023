@@ -18,10 +18,11 @@ import MonadFD4
 import Subst ( subst )
 
 hasPrint :: MonadFD4 m => TTerm -> m Bool
-hasPrint (V _ (Global n)) = do d <- lookupDecl n
-                               case d of
-                                 Just t -> hasPrint t
-                                 _ -> failFD4 "Global variable not assigned"
+hasPrint (V _ (Global n)) = 
+  do d <- lookupDecl n
+     case d of
+       Just t -> hasPrint t
+       _ -> failFD4 "Global variable not assigned"
 hasPrint (V _ _) = return False
 hasPrint (Const _ _) = return False
 hasPrint (Lam _ _ _ (Sc1 t)) = hasPrint t
@@ -61,8 +62,12 @@ optimizeTerm :: MonadFD4 m => TTerm -> m TTerm
 optimizeTerm (BinaryOp i Add (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (n+m))
 optimizeTerm (BinaryOp _ Add (Const _ (CNat 0)) m) = return m
 optimizeTerm (BinaryOp _ Add n (Const _ (CNat 0))) = return n
-optimizeTerm (BinaryOp i Sub (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (n-m))
+optimizeTerm (BinaryOp i Sub (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (max (n-m) 0))
 optimizeTerm (BinaryOp _ Sub n (Const _ (CNat 0))) = return n
+optimizeTerm t@(BinaryOp i Sub (Const _ (CNat 0)) n) = 
+  do b <- hasPrint n
+     if b then do return $ Const i (CNat 0)
+          else return t
 optimizeTerm (Let i x ty def (Sc1 c@(Const _ _))) = 
   do b <- hasPrint def
      if b then do def' <- optimizeTerm def
