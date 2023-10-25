@@ -17,16 +17,31 @@ import Lang
 import MonadFD4
 import Subst ( subst )
 
-hasEffects :: TTerm -> Bool
-hasEffects (V _ _) = False
-hasEffects (Const _ _) = False
-hasEffects (Lam _ _ _ (Sc1 t)) = hasEffects t
-hasEffects (App _ l r) = True
-hasEffects Print {} = True
-hasEffects (BinaryOp _ _ l r) = hasEffects l || hasEffects r
-hasEffects (Fix _ _ _ _ _ (Sc2 t)) = hasEffects t
-hasEffects (IfZ _ c t e) = hasEffects c || hasEffects t || hasEffects e
-hasEffects (Let _ _ _ def (Sc1 t)) = hasEffects def || hasEffects t
+hasPrint :: MonadFD4 m => TTerm -> m Bool
+hasPrint (V _ (Global n)) = do d <- lookupDecl n
+                               case d of
+                                 Just t -> hasPrint t
+                                 _ -> failFD4 "Global variable not assigned"
+hasPrint (V _ _) = return False
+hasPrint (Const _ _) = return False
+hasPrint (Lam _ _ _ (Sc1 t)) = hasPrint t
+hasPrint (App _ l r) = 
+  do l' <- hasPrint l
+     if l' then return True else hasPrint r
+hasPrint Print {} = return True
+hasPrint (BinaryOp _ _ l r) = 
+  do l' <- hasPrint l
+     if l' then return True else hasPrint r
+hasPrint (Fix _ _ _ _ _ (Sc2 t)) = hasPrint t
+hasPrint (IfZ _ c t e) = 
+  do l' <- hasPrint c
+     if l' then return True 
+           else do t' <- hasPrint t
+                   if t' then return True
+                         else hasPrint e
+hasPrint (Let _ _ _ def (Sc1 t)) = 
+  do l' <- hasPrint def
+     if l' then return True else hasPrint t
 
 loop :: MonadFD4 m => Int -> TTerm -> m TTerm
 loop n e = do
@@ -49,10 +64,10 @@ optimizeTerm (BinaryOp _ Add n (Const _ (CNat 0))) = return n
 optimizeTerm (BinaryOp i Sub (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (n-m))
 optimizeTerm (BinaryOp _ Sub n (Const _ (CNat 0))) = return n
 optimizeTerm (Let i x ty def (Sc1 c@(Const _ _))) = 
-  if hasEffects def
-  then do def' <- optimizeTerm def
-          return $ Let i x ty def' (Sc1 c)
-  else return c
+  do b <- hasPrint def
+     if b then do def' <- optimizeTerm def
+                  return $ Let i x ty def' (Sc1 c)
+          else return c
 -- Constant Propagation
 optimizeTerm (Let _ n _ c@(Const _ _) t) = return $ subst c t
 -- Recursion
