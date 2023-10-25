@@ -1,0 +1,1 @@
+let y:Nat = print "Y= " (let x:Nat = 3 + 2 in x + 1)
