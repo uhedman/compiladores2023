@@ -73,6 +73,8 @@ optimizeTerm (Let i x ty def (Sc1 c@(Const _ _))) =
      if b then do def' <- optimizeTerm def
                   return $ Let i x ty def' (Sc1 c)
           else return c
+-- Dead code elimination
+optimizeTerm (Let _ "_" _ _ (Sc1 t)) = return t
 -- Constant Propagation
 optimizeTerm (Let _ n _ c@(Const _ _) t) = return $ subst c t
 -- Recursion
@@ -102,6 +104,5 @@ optimizeTerm (IfZ i c t e) =
      return $ IfZ i c' t' e'
 optimizeTerm (Let i x ty def (Sc1 t)) = 
   do def' <- optimizeTerm def
-     return $ Let i x ty def' (Sc1 t)
-    --  t' <- optimizeTerm t
-    --  return $ Let i x ty def' (Sc1 t')
+     t' <- optimizeTerm t
+     return $ Let i x ty def' (Sc1 t')
