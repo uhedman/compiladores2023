@@ -30,6 +30,7 @@ module MonadFD4 (
   getMode,
   getOpt,
   getCek,
+  getProf,
   eraseLastFileDecls,
   failPosFD4,
   failFD4,
@@ -68,12 +69,19 @@ y otras operaciones derivadas de ellas, como por ejemplo
    - @gets :: (GlEnv -> a) -> m a@  
 -}
 class (MonadIO m, MonadState GlEnv m, MonadError Error m, MonadReader Conf m) => MonadFD4 m where
+    addStep :: m ()
+    addOp :: m ()
+    setMem :: Int -> m ()
+    addClos :: m ()
 
 getOpt :: MonadFD4 m => m Bool
 getOpt = asks opt
 
 getCek :: MonadFD4 m => m Bool
 getCek = asks cek
+
+getProf :: MonadFD4 m => m Bool
+getProf = asks prof
 
 getMode :: MonadFD4 m => m Mode
 getMode = asks modo
@@ -113,12 +121,12 @@ lookupDecl :: MonadFD4 m => Name -> m (Maybe TTerm)
 lookupDecl nm = do
      s <- get
      case filter (hasName nm) (glb s) of
-       (Decl { declBody=e }):_ -> return (Just e)
-       (DeclTy {}):_ -> return Nothing
+       Decl { declBody=e }:_ -> return (Just e)
+       DeclTy {}:_ -> return Nothing
        [] -> return Nothing
    where hasName :: Name -> Decl a -> Bool
-         hasName nm (Decl { declName = nm' }) = nm == nm'
-         hasName nm (DeclTy { declName = nm' }) = nm == nm'
+         hasName nm Decl { declName = nm' } = nm == nm'
+         hasName nm DeclTy { declName = nm' } = nm == nm'
 
 lookupTy :: MonadFD4 m => Name -> m (Maybe Ty)
 lookupTy nm = do
@@ -144,10 +152,20 @@ catchErrors c = catchError (Just <$> c)
 -- | El tipo @FD4@ es un sinónimo de tipo para una mónada construida usando dos transformadores de mónada sobre la mónada @IO@.
 -- El transformador de mónad @ExcepT Error@ agrega a la mónada IO la posibilidad de manejar errores de tipo 'Errors.Error'.
 -- El transformador de mónadas @StateT GlEnv@ agrega la mónada @ExcepT Error IO@ la posibilidad de manejar un estado de tipo 'Global.GlEnv'.
-type FD4 = ReaderT Conf (StateT GlEnv (ExceptT Error IO))
+newtype FD4 a = FD4 (ReaderT Conf (StateT GlEnv (ExceptT Error IO)) a)
+newtype FD4Prof a = FD4Prof (ReaderT Conf (StateT GlEnv (ExceptT Error IO)) a)
 
--- | Esta es una instancia vacía, ya que 'MonadFD4' no tiene funciones miembro.
-instance MonadFD4 FD4
+instance MonadFD4 FD4 where
+    addStep = return ()
+    addOp = return ()
+    setMem m = return ()
+    addClos = return ()
+
+instance MonadFD4 FD4Prof where
+    addStep = modify (\s-> s {stats = (stats s) {steps = steps (stats s) + 1}})
+    addOp = modify (\s-> s {stats = (stats s) {ops = ops (stats s) + 1}})
+    setMem m = modify (\s-> s {stats = (stats s) {mem = max m (mem (stats s))}})
+    addClos = modify (\s-> s {stats = (stats s) {clos = clos (stats s) + 1}})
 
 -- 'runFD4\'' corre una computación de la mónad 'FD4' en el estado inicial 'Global.initialEnv' 
 runFD4' :: FD4 a -> Conf -> IO (Either Error (a, GlEnv))

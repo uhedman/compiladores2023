@@ -46,8 +46,8 @@ prompt = "FD4> "
 
 
 -- | Parser de banderas
-parseMode :: Parser (Mode,Bool,Bool)
-parseMode = (,,) <$>
+parseMode :: Parser (Mode,Bool,Bool,Bool)
+parseMode = (,,,) <$>
       (flag' Typecheck ( long "typecheck" <> short 't' <> help "Chequear tipos e imprimir el término")
       <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
       <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
@@ -60,10 +60,11 @@ parseMode = (,,) <$>
       )
    <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
    <*> flag False True (long "cek" <> short 'k' <> help "Utilizar la CEK")
+   <*> flag False True (long "profiling" <> short 'p' <> help "Mostrar metricas del programa")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
-parseArgs :: Parser (Mode,Bool,Bool, [FilePath])
-parseArgs = (\(a,b,b') c -> (a,b,b',c)) <$> parseMode <*> many (argument str (metavar "FILES..."))
+parseArgs :: Parser (Mode,Bool,Bool,Bool, [FilePath])
+parseArgs = (\(m,o,c,p) f -> (m,o,c,p,f)) <$> parseMode <*> many (argument str (metavar "FILES..."))
 
 main :: IO ()
 main = execParser opts >>= go
@@ -73,15 +74,15 @@ main = execParser opts >>= go
      <> progDesc "Compilador de FD4"
      <> header "Compilador de FD4 de la materia Compiladores 2022" )
 
-    go :: (Mode,Bool,Bool,[FilePath]) -> IO ()
-    go (Interactive,opt,cek,files) =
-              runOrFail (Conf opt cek Interactive) (runInputT defaultSettings (repl files))
-    go (Bytecompile,opt,cek,files) =
-              runOrFail (Conf opt cek RunVM) $ mapM_ bytecompileFile files
-    go (RunVM,opt,cek,files) =
-              runOrFail (Conf opt cek RunVM) $ mapM_ runVMFile files
-    go (m,opt,cek, files) =
-              runOrFail (Conf opt cek m) $ mapM_ compileFile files
+    go :: (Mode,Bool,Bool,Bool,[FilePath]) -> IO ()
+    go (Interactive,opt,cek,prof,files) =
+              runOrFail (Conf opt cek prof Interactive) (runInputT defaultSettings (repl files))
+    go (Bytecompile,opt,cek,prof,files) =
+              runOrFail (Conf opt cek prof RunVM) $ mapM_ bytecompileFile files
+    go (RunVM,opt,cek,prof,files) =
+              runOrFail (Conf opt cek prof RunVM) $ mapM_ runVMFile files
+    go (m,opt,cek,prof,files) =
+              runOrFail (Conf opt cek prof m) $ mapM_ compileFile files
 
 runOrFail :: Conf -> FD4 a -> IO a
 runOrFail c m = do
@@ -157,7 +158,8 @@ evalDecl d = return d
 
 evalDeclCek :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
 evalDeclCek (Decl p x e) = 
-  do e' <- evalCEK e
+  do prof <- getProf
+     e' <- evalCEK e
      return $ Decl p x e'
 evalDeclCek d = return d
 
