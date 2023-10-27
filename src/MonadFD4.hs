@@ -35,6 +35,7 @@ module MonadFD4 (
   getCek,
   getProf,
   getStats,
+  resetStats,
   eraseLastFileDecls,
   failPosFD4,
   failFD4,
@@ -98,6 +99,9 @@ getInter = gets inter
 
 getStats :: MonadFD4 m => m Statistics
 getStats = gets stats
+
+resetStats :: MonadFD4 m => m ()
+resetStats = modify (\s-> s {stats = Statistics 0 0 0 0})
 
 printFD4 :: MonadFD4 m => String -> m ()
 printFD4 = liftIO . putStrLn

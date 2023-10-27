@@ -10,7 +10,7 @@ Este módulo permite compilar módulos a la Macchina. También provee
 una implementación de la Macchina para ejecutar el bytecode.
 -}
 module Optimize
-  ( optimizeDecl )
+  ( optimizeDecl, optimizeTerm )
  where
 
 import Lang
@@ -60,23 +60,29 @@ optimizeDecl d@DeclTy {} = return d
 optimizeTerm :: MonadFD4 m => TTerm -> m TTerm
 -- Constant folding
 optimizeTerm (BinaryOp i Add (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (n+m))
-optimizeTerm (BinaryOp _ Add (Const _ (CNat 0)) m) = return m
-optimizeTerm (BinaryOp _ Add n (Const _ (CNat 0))) = return n
+optimizeTerm (BinaryOp _ Add (Const _ (CNat 0)) m) = optimizeTerm m
+optimizeTerm (BinaryOp _ Add n (Const _ (CNat 0))) = optimizeTerm n
 optimizeTerm (BinaryOp i Sub (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (max (n-m) 0))
-optimizeTerm (BinaryOp _ Sub n (Const _ (CNat 0))) = return n
-optimizeTerm t@(BinaryOp i Sub (Const _ (CNat 0)) n) = 
+optimizeTerm (BinaryOp _ Sub n (Const _ (CNat 0))) = optimizeTerm n
+optimizeTerm t@(BinaryOp i Sub (Const i' (CNat 0)) n) = 
   do b <- hasPrint n
-     if b then do return $ Const i (CNat 0)
-          else return t
+     if b then do n' <- optimizeTerm n
+                  return $ BinaryOp i Sub (Const i' (CNat 0)) n'
+          else return $ Const i' (CNat 0)
 optimizeTerm (Let i x ty def (Sc1 c@(Const _ _))) = 
   do b <- hasPrint def
      if b then do def' <- optimizeTerm def
                   return $ Let i x ty def' (Sc1 c)
           else return c
 -- Dead code elimination
-optimizeTerm (Let _ "_" _ _ (Sc1 t)) = return t
+optimizeTerm l@(Let i "_" ty def (Sc1 t)) = 
+  do b <- hasPrint def
+     if b then do def' <- optimizeTerm def
+                  t' <- optimizeTerm t
+                  return $ Let i "_" ty def' (Sc1 t')
+          else return t
 -- Constant Propagation
-optimizeTerm (Let _ n _ c@(Const _ _) t) = return $ subst c t
+optimizeTerm (Let _ n _ c@(Const _ _) t) = optimizeTerm $ subst c t
 -- Recursion
 optimizeTerm v@(V _ _) = return v
 optimizeTerm c@(Const _ _) = return c

@@ -84,7 +84,7 @@ main = execParser opts >>= go
       if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ runVMFile files
               else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ runVMFile files
     go (m,opt,cek,prof,files) =
-      if prof then runOrFail (Conf opt cek prof m) $ Right $ mapM_ runVMFile files
+      if prof then runOrFail (Conf opt cek prof m) $ Right $ mapM_ compileFile files
               else runOrFail (Conf opt cek prof m) $ Left $ mapM_ compileFile files   
 
 runOrFail :: Conf -> Either (FD4 a) (FD4Prof a) -> IO a
@@ -130,6 +130,9 @@ loadFile f = do
 runVMFile ::  MonadFD4 m => FilePath -> m ()
 runVMFile f = do bc <- liftIO $ bcRead f
                  runBC bc
+                 p <- getProf
+                 Control.Monad.when p $ do stats <- getStats
+                                           printFD4 (ppStats stats)
 
 bytecompileFile :: MonadFD4 m => FilePath -> m ()
 bytecompileFile f = do
@@ -138,10 +141,13 @@ bytecompileFile f = do
   bc <- bytecompileModule tds
   liftIO $ bcWrite bc (dropExtension f ++ ".bc32") -- liftIO?
     where aux d = do td <- typecheckDecl d
-                     opt <- getOpt
-                     td' <- if opt then optimizeDecl td else return td
-                     addDecl td'
-                     return td'
+                     case td of
+                       Decl {} -> do opt <- getOpt
+                                     td' <- if opt then optimizeDecl td else return td
+                                     addDecl td'
+                                     return td'
+                       (DeclTy _ x ty) -> do addTy x ty
+                                             return td
 
 compileFile ::  MonadFD4 m => FilePath -> m ()
 compileFile f = do
@@ -165,8 +171,7 @@ evalDecl d = return d
 
 evalDeclCek :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
 evalDeclCek (Decl p x e) = 
-  do prof <- getProf
-     e' <- evalCEK e
+  do e' <- evalCEK e
      return $ Decl p x e'
 evalDeclCek d = return d
 
@@ -188,9 +193,6 @@ handleDecl d = do
                   cek <- getCek
                   te <- if cek then evalCEK tt else eval tt
                   addDecl (Decl p x te)
-                  prof <- getProf
-                  Control.Monad.when prof $ do stats <- getStats
-                                               printFD4 (ppStats stats)
                 (DeclTy p x ty) -> do
                   addTy x ty
           Typecheck -> do
@@ -202,9 +204,6 @@ handleDecl d = do
               td' <- if opt then optimizeDecl td else return td
               ppterm <- ppDecl td'
               printFD4 ppterm
-              prof <- getProf
-              Control.Monad.when prof $ do stats <- getStats
-                                           printFD4 (ppStats stats)
           Eval -> do
               td <- typecheckDecl d
               opt <- getOpt
@@ -212,9 +211,6 @@ handleDecl d = do
               cek <- getCek
               ed <- if cek then evalDeclCek td' else evalDecl td'
               addDecl ed
-              prof <- getProf
-              Control.Monad.when prof $ do stats <- getStats
-                                           printFD4 (ppStats stats)
           _ -> return ()
 
 data Command = Compile CompileForm
@@ -309,8 +305,9 @@ handleTerm t = do
          ppte <- pp te
          printFD4 (ppte ++ " : " ++ ppTy (getTy tt))
          prof <- getProf
-         Control.Monad.when prof $ do stats <- getStats
-                                      printFD4 (ppStats stats)
+         when prof (do stats <- getStats
+                       printFD4 (ppStats stats)
+                       resetStats)
 
 printPhrase   :: MonadFD4 m => String -> m ()
 printPhrase x =
