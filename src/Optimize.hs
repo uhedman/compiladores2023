@@ -53,7 +53,7 @@ loop n e = do
 
 optimizeDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
 optimizeDecl (Decl p x t) = 
-  do t' <- optimizeTerm t
+  do t' <- loop 50 t
      return $ Decl p x t'
 optimizeDecl d@DeclTy {} = return d
 
@@ -101,8 +101,8 @@ optimizeTerm (BinaryOp i op l r) =
      r' <- optimizeTerm r
      return $ BinaryOp i op l' r'
 optimizeTerm (Fix i x xty f fty t) = 
-  do t' <- optimizeTerm (open2 x f t)
-     return $ Fix i x xty f fty (close2 x f t')
+  do t' <- optimizeTerm (open2 f x t)
+     return $ Fix i x xty f fty (close2 f x t')
 optimizeTerm (IfZ i c t e) = 
   do c' <- optimizeTerm c
      t' <- optimizeTerm t
@@ -111,4 +111,4 @@ optimizeTerm (IfZ i c t e) =
 optimizeTerm (Let i x ty def t) = 
   do def' <- optimizeTerm def
      t' <- optimizeTerm (open x t)
-     return $ Let i x ty def' (Sc1 t')
+     return $ Let i x ty def' (close x t')
