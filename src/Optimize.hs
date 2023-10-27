@@ -15,7 +15,7 @@ module Optimize
 
 import Lang
 import MonadFD4
-import Subst ( subst )
+import Subst ( subst, open, open2, close2, close )
 
 hasPrint :: MonadFD4 m => TTerm -> m Bool
 hasPrint (V _ (Global n)) = 
@@ -53,7 +53,7 @@ loop n e = do
 
 optimizeDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
 optimizeDecl (Decl p x t) = 
-  do t' <- loop 50 t
+  do t' <- optimizeTerm t
      return $ Decl p x t'
 optimizeDecl d@DeclTy {} = return d
 
@@ -82,13 +82,13 @@ optimizeTerm l@(Let i "_" ty def (Sc1 t)) =
                   return $ Let i "_" ty def' (Sc1 t')
           else return t
 -- Constant Propagation
-optimizeTerm (Let _ n _ c@(Const _ _) t) = optimizeTerm $ subst c t
+optimizeTerm (Let _ _ _ c@(Const _ _) t) = return $ subst c t
 -- Recursion
 optimizeTerm v@(V _ _) = return v
 optimizeTerm c@(Const _ _) = return c
-optimizeTerm (Lam i x ty (Sc1 t)) = 
-  do t' <- optimizeTerm t
-     return $ Lam i x ty (Sc1 t')
+optimizeTerm (Lam i x ty t) = 
+  do t' <- optimizeTerm (open x t)
+     return $ Lam i x ty (close x t')
 optimizeTerm (App i l r) = 
   do l' <- optimizeTerm l
      r' <- optimizeTerm r
@@ -100,15 +100,15 @@ optimizeTerm (BinaryOp i op l r) =
   do l' <- optimizeTerm l
      r' <- optimizeTerm r
      return $ BinaryOp i op l' r'
-optimizeTerm (Fix i x xty f fty (Sc2 t)) = 
-  do t' <- optimizeTerm t
-     return $ Fix i x xty f fty (Sc2 t')
+optimizeTerm (Fix i x xty f fty t) = 
+  do t' <- optimizeTerm (open2 x f t)
+     return $ Fix i x xty f fty (close2 x f t')
 optimizeTerm (IfZ i c t e) = 
   do c' <- optimizeTerm c
      t' <- optimizeTerm t
      e' <- optimizeTerm e
      return $ IfZ i c' t' e'
-optimizeTerm (Let i x ty def (Sc1 t)) = 
+optimizeTerm (Let i x ty def t) = 
   do def' <- optimizeTerm def
-     t' <- optimizeTerm t
+     t' <- optimizeTerm (open x t)
      return $ Let i x ty def' (Sc1 t')
