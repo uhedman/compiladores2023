@@ -14,7 +14,8 @@ module PPrint (
     pp,
     ppTy,
     ppName,
-    ppDecl
+    ppDecl,
+    ppStats
     ) where
 
 import Lang
@@ -35,7 +36,7 @@ import Prettyprinter
       Doc,
       Pretty(pretty) )
 import MonadFD4 ( gets, MonadFD4 )
-import Global ( GlEnv(glb) )
+import Global
 
 freshen :: [Name] -> Name -> Name
 freshen ns n = let cands = n : map (\i -> n ++ show i) [0..] 
@@ -233,3 +234,11 @@ ppDecl (DeclTy p x t) = do
                        , names2doc [x] 
                        , defColor (pretty "=")
                        , ty2doc t])
+
+-- | Pretty printing de estadisticas
+ppStats :: Statistics -> String
+ppStats st = let Statistics { steps = s, ops = o, mem = m, clos = c } = st
+             in "Steps: " ++ show s ++ "\n" ++
+                "Ops: " ++ show o ++ "\n" ++
+                "Memory: " ++ show m ++ "\n" ++
+                "Closures: " ++ show c

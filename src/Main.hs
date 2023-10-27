@@ -32,18 +32,17 @@ import Lang
 import Parse ( P, tm, program, declOrTm, runP )
 import Elab ( elab, elabDecl )
 import Eval ( eval )
-import PPrint ( pp , ppTy, ppDecl )
+import PPrint ( pp , ppTy, ppDecl, ppStats )
 import MonadFD4
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
 import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
 import Optimize ( optimizeDecl )
 import System.FilePath ( dropExtension )
+import qualified Control.Monad
 
 prompt :: String
 prompt = "FD4> "
-
-
 
 -- | Parser de banderas
 parseMode :: Parser (Mode,Bool,Bool,Bool)
@@ -76,17 +75,23 @@ main = execParser opts >>= go
 
     go :: (Mode,Bool,Bool,Bool,[FilePath]) -> IO ()
     go (Interactive,opt,cek,prof,files) =
-              runOrFail (Conf opt cek prof Interactive) (runInputT defaultSettings (repl files))
+      if prof then runOrFail (Conf opt cek prof Interactive) $ Right (runInputT defaultSettings (repl files))
+              else runOrFail (Conf opt cek prof Interactive) $ Left (runInputT defaultSettings (repl files))
     go (Bytecompile,opt,cek,prof,files) =
-              runOrFail (Conf opt cek prof RunVM) $ mapM_ bytecompileFile files
+      if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ bytecompileFile files
+              else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ bytecompileFile files
     go (RunVM,opt,cek,prof,files) =
-              runOrFail (Conf opt cek prof RunVM) $ mapM_ runVMFile files
+      if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ runVMFile files
+              else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ runVMFile files
     go (m,opt,cek,prof,files) =
-              runOrFail (Conf opt cek prof m) $ mapM_ compileFile files
+      if prof then runOrFail (Conf opt cek prof m) $ Right $ mapM_ runVMFile files
+              else runOrFail (Conf opt cek prof m) $ Left $ mapM_ compileFile files   
 
-runOrFail :: Conf -> FD4 a -> IO a
+runOrFail :: Conf -> Either (FD4 a) (FD4Prof a) -> IO a
 runOrFail c m = do
-  r <- runFD4 m c
+  r <- case m of 
+         Left noProf -> runFD4 noProf c
+         Right prof -> runFD4Prof prof c
   case r of
     Left err -> do
       liftIO $ hPrint stderr err
@@ -133,8 +138,10 @@ bytecompileFile f = do
   bc <- bytecompileModule tds
   liftIO $ bcWrite bc (dropExtension f ++ ".bc32") -- liftIO?
     where aux d = do td <- typecheckDecl d
-                     addDecl td
-                     return td
+                     opt <- getOpt
+                     td' <- if opt then optimizeDecl td else return td
+                     addDecl td'
+                     return td'
 
 compileFile ::  MonadFD4 m => FilePath -> m ()
 compileFile f = do
@@ -174,11 +181,16 @@ handleDecl d = do
         case m of
           Interactive -> do
               dd <- typecheckDecl d
-              case dd of
+              opt <- getOpt
+              dd' <- if opt then optimizeDecl dd else return dd
+              case dd' of
                 (Decl p x tt) -> do
                   cek <- getCek
                   te <- if cek then evalCEK tt else eval tt
                   addDecl (Decl p x te)
+                  prof <- getProf
+                  Control.Monad.when prof $ do stats <- getStats
+                                               printFD4 (ppStats stats)
                 (DeclTy p x ty) -> do
                   addTy x ty
           Typecheck -> do
@@ -190,6 +202,9 @@ handleDecl d = do
               td' <- if opt then optimizeDecl td else return td
               ppterm <- ppDecl td'
               printFD4 ppterm
+              prof <- getProf
+              Control.Monad.when prof $ do stats <- getStats
+                                           printFD4 (ppStats stats)
           Eval -> do
               td <- typecheckDecl d
               opt <- getOpt
@@ -197,6 +212,9 @@ handleDecl d = do
               cek <- getCek
               ed <- if cek then evalDeclCek td' else evalDecl td'
               addDecl ed
+              prof <- getProf
+              Control.Monad.when prof $ do stats <- getStats
+                                           printFD4 (ppStats stats)
           _ -> return ()
 
 data Command = Compile CompileForm
@@ -290,6 +308,9 @@ handleTerm t = do
          te <- if cek then evalCEK tt else eval tt
          ppte <- pp te
          printFD4 (ppte ++ " : " ++ ppTy (getTy tt))
+         prof <- getProf
+         Control.Monad.when prof $ do stats <- getStats
+                                      printFD4 (ppStats stats)
 
 printPhrase   :: MonadFD4 m => String -> m ()
 printPhrase x =
