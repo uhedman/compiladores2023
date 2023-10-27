@@ -104,7 +104,7 @@ ppName = id
 -- | Pretty printer para tipos (Doc)
 sty2doc :: STy -> Doc AnsiStyle
 sty2doc SNatTy = typeColor (pretty "Nat")
-sty2doc (Syn var) = nameColor (pretty var)
+sty2doc (Syn var) = typeColor (pretty var)
 sty2doc (SFun x@(SFun _ _) y) = sep [parens (sty2doc x), typeOpColor (pretty "->"),sty2doc y]
 sty2doc (SFun x y) = sep [sty2doc x, typeOpColor (pretty "->"),sty2doc y] 
 
@@ -235,8 +235,8 @@ ppDecl (Decl p x t) = do
                    <+> nest 2 (t2doc False (openAll fst (map declName gdecl) t)))
 ppDecl (DeclTy p x t) = do 
   gdecl <- gets glb
-  return (render $ sep [defColor (pretty "type")
-                       , names2doc [x] 
+  return (render $ sep [ defColor (pretty "type")
+                       , sty2doc (Syn x) 
                        , defColor (pretty "=")
                        , ty2doc t])
 

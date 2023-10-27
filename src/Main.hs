@@ -199,7 +199,7 @@ handleDecl d = do
               f <- getLastFile
               printFD4 ("Chequeando tipos de "++f)
               td <- typecheckDecl d
-              addDecl td
+              addDecl' td
               opt <- getOpt
               td' <- if opt then optimizeDecl td else return td
               ppterm <- ppDecl td'
@@ -210,8 +210,11 @@ handleDecl d = do
               td' <- if opt then optimizeDecl td else return td
               cek <- getCek
               ed <- if cek then evalDeclCek td' else evalDecl td'
-              addDecl ed
+              addDecl' ed
           _ -> return ()
+  where addDecl' (DeclTy _ x ty) = addTy x ty
+        addDecl' t = addDecl t
+
 
 data Command = Compile CompileForm
              | PPrint String
