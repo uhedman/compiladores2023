@@ -44,6 +44,18 @@ hasPrint (Let _ _ _ def (Sc1 t)) =
   do l' <- hasPrint def
      if l' then return True else hasPrint t
 
+hasVar :: Name -> TTerm -> Bool
+hasVar n (V _ (Free m)) = n == m
+hasVar n (V _ _) = False
+hasVar _ Const {} = False
+hasVar n (Lam _ m _ (Sc1 t)) = n /= m && hasVar n t
+hasVar n (App _ l r) = hasVar n l || hasVar n r
+hasVar Print {} = False
+hasVar n (BinaryOp _ _ l r) = hasVar n l || hasVar n r
+hasVar n (Fix _ x _ f _ (Sc2 t)) = n /= x && n /= f && hasVar n t
+hasVar n (IfZ _ c t e) = hasVar n c || hasVar n t || hasVar n e
+hasVar n (Let _ m _ def (Sc1 t)) = n /= m && (hasVar n def || hasVar n t)
+
 loop :: MonadFD4 m => Int -> TTerm -> m TTerm
 loop n e = do
   if n == 0 
@@ -83,6 +95,14 @@ optimizeTerm l@(Let i "_" ty def (Sc1 t)) =
           else return t
 -- Constant Propagation
 optimizeTerm (Let _ _ _ c@(Const _ _) t) = return $ subst c t
+-- Inline expansion
+optimizeTerm l@(Let _ x _ (Lam {}) (Sc1 t)) = return l -- wip
+optimizeTerm l@(Let _ x _ (Fix {}) (Sc1 t)) = return l -- wip
+optimizeTerm l@(Let _ x _ def (Sc1 t)) = 
+  do b <- hasPrint def
+     if b || hasVar x t 
+        then return $ subst def l -- Inline expansion
+        else return $ close x t   -- Dead code elimination
 -- Recursion
 optimizeTerm v@(V _ _) = return v
 optimizeTerm c@(Const _ _) = return c
