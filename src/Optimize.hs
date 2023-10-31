@@ -36,17 +36,17 @@ hasPrint (Fix _ _ _ _ _ (Sc2 t)) = hasPrint t
 hasPrint (IfZ _ c t e) = hasPrint c ||^ hasPrint t ||^ hasPrint e
 hasPrint (Let _ _ _ def (Sc1 t)) = hasPrint def ||^ hasPrint t
 
-hasVar :: Name -> TTerm -> Bool
-hasVar n (V _ (Free m)) = n == m
-hasVar n (V _ _) = False
-hasVar _ Const {} = False
-hasVar n (Lam _ m _ (Sc1 t)) = n /= m && hasVar n t
-hasVar n (App _ l r) = hasVar n l || hasVar n r
-hasVar _ Print {} = False
-hasVar n (BinaryOp _ _ l r) = hasVar n l || hasVar n r
-hasVar n (Fix _ x _ f _ (Sc2 t)) = n /= x && n /= f && hasVar n t
-hasVar n (IfZ _ c t e) = hasVar n c || hasVar n t || hasVar n e
-hasVar n (Let _ m _ def (Sc1 t)) = n /= m && (hasVar n def || hasVar n t)
+hasVar :: Int -> TTerm -> Bool
+hasVar n (V _ (Bound i)) = n == i
+hasVar _ (V _ _) = False 
+hasVar n (Lam _ _ _ (Sc1 t)) = hasVar (n+1) t
+hasVar n (App p l r) = hasVar n l || hasVar n r
+hasVar n (Fix p f fty x xty (Sc2 t)) = hasVar (n+2) t
+hasVar n (IfZ p c t e) = hasVar n c || hasVar n t || hasVar n e
+hasVar _ t@(Const _ _) = False
+hasVar n (Print p str t) = hasVar n t
+hasVar n (BinaryOp p op t u) = hasVar n t || hasVar n u
+hasVar n (Let p v vty m (Sc1 o)) = hasVar n m || hasVar (n+1) o
 
 loop :: MonadFD4 m => Int -> TTerm -> m TTerm
 loop n e = do
@@ -81,11 +81,11 @@ deadCode l@(Let i "_" ty def t) =
      if b 
      then return (False, l)
      else return (True, open "_" t)
-deadCode l@(Let i x ty def t) = 
+deadCode l@(Let i x ty def (Sc1 t)) = 
   do b <- hasPrint def
-     if b || hasVar x (open x t) -- ineficiente
+     if b || hasVar 0 t
      then return (False, l)
-     else return (True, open x t)
+     else return (True, open x (Sc1 t))
 deadCode t = return (False, t)
 
 -- Constant Propagation
@@ -95,8 +95,8 @@ constProg t = return (False, t)
 
 -- Inline expansion
 inlineExp :: MonadFD4 m => TTerm -> m (Bool, TTerm)
-inlineExp l@(Let _ x _ Lam {} (Sc1 t)) = return (False, l) -- wip
-inlineExp l@(Let _ x _ Fix {} (Sc1 t)) = return (False, l) -- wip
+inlineExp l@(Let _ x _ Lam {} (Sc1 t)) = return (False, l)
+inlineExp l@(Let _ x _ Fix {} (Sc1 t)) = return (False, l)
 inlineExp l@(Let _ x _ def (Sc1 t)) = 
   do b <- hasPrint def
      if b 
