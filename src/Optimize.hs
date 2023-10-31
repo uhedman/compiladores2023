@@ -15,7 +15,8 @@ module Optimize
 
 import Lang
 import MonadFD4
-import Subst ( subst, open, open2, close2, close )
+import Subst ( subst, open )
+import Control.Monad.Extra ( (||^) )
 
 hasPrint :: MonadFD4 m => TTerm -> m Bool
 hasPrint (V _ (Global n)) = 
@@ -30,19 +31,10 @@ hasPrint (App _ l r) =
   do l' <- hasPrint l
      if l' then return True else hasPrint r
 hasPrint Print {} = return True
-hasPrint (BinaryOp _ _ l r) = 
-  do l' <- hasPrint l
-     if l' then return True else hasPrint r
+hasPrint (BinaryOp _ _ l r) = hasPrint l ||^ hasPrint r
 hasPrint (Fix _ _ _ _ _ (Sc2 t)) = hasPrint t
-hasPrint (IfZ _ c t e) = 
-  do l' <- hasPrint c
-     if l' then return True 
-           else do t' <- hasPrint t
-                   if t' then return True
-                         else hasPrint e
-hasPrint (Let _ _ _ def (Sc1 t)) = 
-  do l' <- hasPrint def
-     if l' then return True else hasPrint t
+hasPrint (IfZ _ c t e) = hasPrint c ||^ hasPrint t ||^ hasPrint e
+hasPrint (Let _ _ _ def (Sc1 t)) = hasPrint def ||^ hasPrint t
 
 hasVar :: Name -> TTerm -> Bool
 hasVar n (V _ (Free m)) = n == m
@@ -50,7 +42,7 @@ hasVar n (V _ _) = False
 hasVar _ Const {} = False
 hasVar n (Lam _ m _ (Sc1 t)) = n /= m && hasVar n t
 hasVar n (App _ l r) = hasVar n l || hasVar n r
-hasVar Print {} = False
+hasVar _ Print {} = False
 hasVar n (BinaryOp _ _ l r) = hasVar n l || hasVar n r
 hasVar n (Fix _ x _ f _ (Sc2 t)) = n /= x && n /= f && hasVar n t
 hasVar n (IfZ _ c t e) = hasVar n c || hasVar n t || hasVar n e
@@ -60,8 +52,8 @@ loop :: MonadFD4 m => Int -> TTerm -> m TTerm
 loop n e = do
   if n == 0 
   then return e
-  else do e' <- optimizeTerm e
-          if e == e' then return e' else loop (n-1) e'
+  else do (b, e') <- optimizeTerm e
+          if b then loop (n-1) e' else return e' 
 
 optimizeDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
 optimizeDecl (Decl p x t) = 
@@ -69,66 +61,51 @@ optimizeDecl (Decl p x t) =
      return $ Decl p x t'
 optimizeDecl d@DeclTy {} = return d
 
-optimizeTerm :: MonadFD4 m => TTerm -> m TTerm
 -- Constant folding
-optimizeTerm (BinaryOp i Add (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (n+m))
-optimizeTerm (BinaryOp _ Add (Const _ (CNat 0)) m) = optimizeTerm m
-optimizeTerm (BinaryOp _ Add n (Const _ (CNat 0))) = optimizeTerm n
-optimizeTerm (BinaryOp i Sub (Const _ (CNat n)) (Const _ (CNat m))) = return $ Const i (CNat (max (n-m) 0))
-optimizeTerm (BinaryOp _ Sub n (Const _ (CNat 0))) = optimizeTerm n
-optimizeTerm t@(BinaryOp i Sub (Const i' (CNat 0)) n) = 
+consFold :: MonadFD4 m => TTerm -> m (Bool, TTerm)
+consFold (BinaryOp i Add (Const _ (CNat n)) (Const _ (CNat m))) = return (True, Const i (CNat (n+m)))
+consFold (BinaryOp _ Add (Const _ (CNat 0)) m) = return (True, m)
+consFold (BinaryOp _ Add n (Const _ (CNat 0))) = return (True, n)
+consFold (BinaryOp i Sub (Const _ (CNat n)) (Const _ (CNat m))) = return (True, Const i (CNat (max (n-m) 0)))
+consFold (BinaryOp _ Sub n (Const _ (CNat 0))) = return (True, n)
+consFold t@(BinaryOp i Sub (Const _ (CNat 0)) n) = 
   do b <- hasPrint n
-     if b then do n' <- optimizeTerm n
-                  return $ BinaryOp i Sub (Const i' (CNat 0)) n'
-          else return $ Const i' (CNat 0)
-optimizeTerm (Let i x ty def (Sc1 c@(Const _ _))) = 
-  do b <- hasPrint def
-     if b then do def' <- optimizeTerm def
-                  return $ Let i x ty def' (Sc1 c)
-          else return c
+     if b then return (False, t)
+          else return (True, Const i (CNat 0))
+consFold t = return (False, t)
+
 -- Dead code elimination
-optimizeTerm l@(Let i "_" ty def (Sc1 t)) = 
+deadCode :: MonadFD4 m => TTerm -> m (Bool, TTerm)
+deadCode l@(Let i "_" ty def t) = 
   do b <- hasPrint def
-     if b then do def' <- optimizeTerm def
-                  t' <- optimizeTerm t
-                  return $ Let i "_" ty def' (Sc1 t')
-          else return t
+     if b then return (False, l)
+          else return (True, open "_" t)
+deadCode t = return (False, t)
+
 -- Constant Propagation
-optimizeTerm (Let _ _ _ c@(Const _ _) t) = return $ subst c t
+constProg :: MonadFD4 m => TTerm -> m (Bool, TTerm)
+constProg (Let _ _ _ c@(Const _ _) t) = return (True, subst c t)
+constProg t = return (False, t)
+
 -- Inline expansion
-optimizeTerm l@(Let _ x _ (Lam {}) (Sc1 t)) = return l -- wip
-optimizeTerm l@(Let _ x _ (Fix {}) (Sc1 t)) = return l -- wip
-optimizeTerm l@(Let _ x _ def (Sc1 t)) = 
+inlineExp :: MonadFD4 m => TTerm -> m (Bool, TTerm)
+inlineExp l@(Let _ x _ Lam {} (Sc1 t)) = return (False, l) -- wip
+inlineExp l@(Let _ x _ Fix {} (Sc1 t)) = return (False, l) -- wip
+inlineExp l@(Let _ x _ def (Sc1 t)) = 
   do b <- hasPrint def
      if b || hasVar x t 
-        then return $ subst def l -- Inline expansion
-        else return $ close x t   -- Dead code elimination
--- Recursion
-optimizeTerm v@(V _ _) = return v
-optimizeTerm c@(Const _ _) = return c
-optimizeTerm (Lam i x ty t) = 
-  do t' <- optimizeTerm (open x t)
-     return $ Lam i x ty (close x t')
-optimizeTerm (App i l r) = 
-  do l' <- optimizeTerm l
-     r' <- optimizeTerm r
-     return $ App i l' r'
-optimizeTerm (Print i str t) = 
-  do t' <- optimizeTerm t
-     return $ Print i str t'
-optimizeTerm (BinaryOp i op l r) = 
-  do l' <- optimizeTerm l
-     r' <- optimizeTerm r
-     return $ BinaryOp i op l' r'
-optimizeTerm (Fix i x xty f fty t) = 
-  do t' <- optimizeTerm (open2 f x t)
-     return $ Fix i x xty f fty (close2 f x t')
-optimizeTerm (IfZ i c t e) = 
-  do c' <- optimizeTerm c
-     t' <- optimizeTerm t
-     e' <- optimizeTerm e
-     return $ IfZ i c' t' e'
-optimizeTerm (Let i x ty def t) = 
-  do def' <- optimizeTerm def
-     t' <- optimizeTerm (open x t)
-     return $ Let i x ty def' (close x t')
+        then return (False, l)
+        else return (True, subst def (Sc1 t))
+inlineExp t = return (False, t)
+
+optimizeTerm :: MonadFD4 m => TTerm -> m (Bool, TTerm)
+optimizeTerm v@(V _ _) = return (False, v)
+optimizeTerm c@(Const _ _) = return (False, c)
+optimizeTerm t@BinaryOp {} = consFold t
+optimizeTerm l@(Let i x ty def t) = 
+  do def' <- consFold def
+     case def' of 
+       (True, Const {}) -> constProg (Let i x ty (snd def') t)
+       (False, _) -> inlineExp l
+       res -> return res
+optimizeTerm t = return (False, t)

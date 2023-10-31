@@ -72,10 +72,10 @@ data SDecl a =
              } deriving (Show, Functor)
 
 newtype Const = CNat Int
-  deriving (Show, Eq)
+  deriving (Show)
 
 data BinaryOp = Add | Sub
-  deriving (Show, Eq)
+  deriving (Show)
 
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
 data Decl a = 
@@ -102,7 +102,7 @@ data Tm info var =
   | Fix info Name Ty Name Ty (Scope2 info var)
   | IfZ info (Tm info var) (Tm info var) (Tm info var)
   | Let info Name Ty (Tm info var) (Scope info var)
-  deriving (Show, Functor, Eq)
+  deriving (Show, Functor)
 
 
 type Term = Tm Pos Var       -- ^ 'Tm' con índices de De Bruijn como variables ligadas, y nombres para libres y globales, guarda posición
@@ -118,9 +118,9 @@ data Var =
 
 -- Scope es un término con una o dos variables que escapan.
 newtype Scope info var = Sc1 (Tm info var)
-  deriving (Functor, Eq)
+  deriving (Functor)
 newtype Scope2 info var = Sc2 (Tm info var)
-  deriving (Functor, Eq)
+  deriving (Functor)
     
 instance (Show info, Show var) => Show (Scope info var) where
     show (Sc1 t) = "{"++show t++"}"
