@@ -78,8 +78,14 @@ consFold t = return (False, t)
 deadCode :: MonadFD4 m => TTerm -> m (Bool, TTerm)
 deadCode l@(Let i "_" ty def t) = 
   do b <- hasPrint def
-     if b then return (False, l)
-          else return (True, open "_" t)
+     if b 
+     then return (False, l)
+     else return (True, open "_" t)
+deadCode l@(Let i x ty def t) = 
+  do b <- hasPrint def
+     if b || hasVar x (open x t) -- ineficiente
+     then return (False, l)
+     else return (True, open x t)
 deadCode t = return (False, t)
 
 -- Constant Propagation
@@ -93,9 +99,9 @@ inlineExp l@(Let _ x _ Lam {} (Sc1 t)) = return (False, l) -- wip
 inlineExp l@(Let _ x _ Fix {} (Sc1 t)) = return (False, l) -- wip
 inlineExp l@(Let _ x _ def (Sc1 t)) = 
   do b <- hasPrint def
-     if b || hasVar x t 
-        then return (False, l)
-        else return (True, subst def (Sc1 t))
+     if b 
+     then return (False, l)
+     else return (True, subst def (Sc1 t))
 inlineExp t = return (False, t)
 
 optimizeTerm :: MonadFD4 m => TTerm -> m (Bool, TTerm)
@@ -103,9 +109,12 @@ optimizeTerm v@(V _ _) = return (False, v)
 optimizeTerm c@(Const _ _) = return (False, c)
 optimizeTerm t@BinaryOp {} = consFold t
 optimizeTerm l@(Let i x ty def t) = 
-  do def' <- consFold def
-     case def' of 
-       (True, Const {}) -> constProg (Let i x ty (snd def') t)
-       (False, _) -> inlineExp l
-       res -> return res
+  do (b, l') <- deadCode l
+     if b 
+     then return (b, l')
+     else do def' <- consFold def
+             case def' of 
+              (True, Const {}) -> constProg (Let i x ty (snd def') t)
+              (False, _) -> inlineExp l
+              res -> return res
 optimizeTerm t = return (False, t)
