@@ -15,7 +15,7 @@ module Optimize
 
 import Lang
 import MonadFD4
-import Subst ( subst, open )
+import Subst ( subst, open, close, open2, close2 )
 import Control.Monad.Extra ( (||^) )
 
 hasPrint :: MonadFD4 m => TTerm -> m Bool
@@ -86,6 +86,9 @@ deadCode l@(Let i x ty def (Sc1 t)) =
      if b || hasVar 0 t
      then return (False, l)
      else return (True, open x (Sc1 t))
+deadCode (IfZ i (Const _ (CNat n)) t e) = 
+  if n == 0 then return (True, t)
+            else return (True, e)
 deadCode t = return (False, t)
 
 -- Constant Propagation
@@ -105,9 +108,28 @@ inlineExp l@(Let _ x _ def (Sc1 t)) =
 inlineExp t = return (False, t)
 
 optimizeTerm :: MonadFD4 m => TTerm -> m (Bool, TTerm)
-optimizeTerm v@(V _ _) = return (False, v)
-optimizeTerm c@(Const _ _) = return (False, c)
+optimizeTerm v@V {} = return (False, v)
+optimizeTerm c@Const {} = return (False, c)
+optimizeTerm (Lam i x ty s) = 
+  do (b, t') <- optimizeTerm (open x s)
+     return (b, Lam i x ty (close x t'))
+optimizeTerm (App i l r) = 
+  do (bl, l') <- optimizeTerm l
+     (br, r') <- optimizeTerm r
+     return (bl || br, App i l' r')
+optimizeTerm (Print i s t) = 
+  do (b, t') <- optimizeTerm t
+     return (b, Print i s t')
 optimizeTerm t@BinaryOp {} = consFold t
+optimizeTerm (Fix i x xty f fty s) = 
+  do (b, t') <- optimizeTerm (open2 f x s)
+     return (b, Fix i x xty f fty (close2 f x t'))
+optimizeTerm z@(IfZ i (Const {}) t e) = deadCode z
+optimizeTerm (IfZ i c t e) = 
+  do (bc, c') <- optimizeTerm c
+     (bt, t') <- optimizeTerm t
+     (be, e') <- optimizeTerm e
+     return (bc || bt || be, IfZ i c' t' e')
 optimizeTerm l@(Let i x ty def t) = 
   do (b, l') <- deadCode l
      if b 
@@ -117,4 +139,3 @@ optimizeTerm l@(Let i x ty def t) =
               (True, Const {}) -> constProg (Let i x ty (snd def') t)
               (False, _) -> inlineExp l
               res -> return res
-optimizeTerm t = return (False, t)
