@@ -36,7 +36,7 @@ data Mode =
   | Eval
   | Bytecompile
   | RunVM
-  -- | CC
+  | CC
   -- | Canon
   -- | Assembler
   -- | Build

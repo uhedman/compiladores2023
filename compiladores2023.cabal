@@ -29,6 +29,7 @@ executable compiladores2023
         Bytecompile
         C
         CEK
+        ClosureConvert
         Common
         Elab
         Errors
