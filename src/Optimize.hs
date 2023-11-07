@@ -76,17 +76,17 @@ consFold t = return (False, t)
 
 -- Dead code elimination
 deadCode :: MonadFD4 m => TTerm -> m (Bool, TTerm)
-deadCode l@(Let i "_" ty def t) = 
+deadCode l@(Let _ "_" _ def t) = 
   do b <- hasPrint def
      if b 
      then return (False, l)
      else return (True, open "_" t)
-deadCode l@(Let i x ty def (Sc1 t)) = 
+deadCode l@(Let _ x _ def (Sc1 t)) = 
   do b <- hasPrint def
      if b || hasVar 0 t
      then return (False, l)
      else return (True, open x (Sc1 t))
-deadCode (IfZ i (Const _ (CNat n)) t e) = 
+deadCode (IfZ _ (Const _ (CNat n)) t e) = 
   if n == 0 then return (True, t)
             else return (True, e)
 deadCode t = return (False, t)

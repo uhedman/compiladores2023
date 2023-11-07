@@ -193,6 +193,10 @@ handleDecl d = do
                   cek <- getCek
                   te <- if cek then evalCEK tt else eval tt
                   addDecl (Decl p x te)
+                  prof <- getProf
+                  when prof (do stats <- getStats
+                                printFD4 (ppStats stats)
+                                resetStats)
                 (DeclTy p x ty) -> do
                   addTy x ty
           Typecheck -> do
@@ -211,6 +215,10 @@ handleDecl d = do
               cek <- getCek
               ed <- if cek then evalDeclCek td' else evalDecl td'
               addDecl' ed
+              prof <- getProf
+              when prof (do stats <- getStats
+                            printFD4 (ppStats stats)
+                            resetStats)
           _ -> return ()
   where addDecl' (DeclTy _ x ty) = addTy x ty
         addDecl' t = addDecl t
