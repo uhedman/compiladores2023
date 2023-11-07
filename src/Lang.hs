@@ -72,10 +72,10 @@ data SDecl a =
              } deriving (Show, Functor)
 
 newtype Const = CNat Int
-  deriving Show
+  deriving (Show)
 
 data BinaryOp = Add | Sub
-  deriving Show
+  deriving (Show)
 
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
 data Decl a = 
@@ -114,13 +114,13 @@ data Var =
     Bound !Int
   | Free Name
   | Global Name
-  deriving Show
+  deriving (Show, Eq)
 
 -- Scope es un término con una o dos variables que escapan.
 newtype Scope info var = Sc1 (Tm info var)
-  deriving Functor
+  deriving (Functor)
 newtype Scope2 info var = Sc2 (Tm info var)
-  deriving Functor
+  deriving (Functor)
     
 instance (Show info, Show var) => Show (Scope info var) where
     show (Sc1 t) = "{"++show t++"}"

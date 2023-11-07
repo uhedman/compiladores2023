@@ -1,0 +1,1 @@
+let (x:Nat) = print "X = " ((let (x:Nat) = 2 in x) + (let (x:Nat) = 3 in x))

@@ -1,2 +1,2 @@
 let rec ack (m n : Nat) : Nat = ifz m then n + 1 else ifz n then ack (m - 1) 1 else ack (m-1) (ack m (n-1))
-let (x:Nat) = print "X = " (ack 3 11)
+let (x:Nat) = print "X = " (ack 1 1)

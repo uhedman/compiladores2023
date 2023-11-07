@@ -27,6 +27,7 @@ executable compiladores2023
     -- Modules included in this executable, other than Main.
     other-modules:
         Bytecompile
+        Bytecompile8
         C
         CEK
         Common
@@ -37,6 +38,7 @@ executable compiladores2023
         IR
         Lang
         MonadFD4
+        Optimize
         PPrint
         Parse
         Subst

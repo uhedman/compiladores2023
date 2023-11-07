@@ -1,0 +1,1 @@
+let y:Nat = let (f:Nat->Nat) = fun (x:Nat) -> x+1 in 1

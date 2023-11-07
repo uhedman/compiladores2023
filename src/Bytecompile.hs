@@ -79,6 +79,7 @@ pattern DROP     = 12
 pattern PRINT    = 13
 pattern PRINTN   = 14
 pattern JUMP     = 15
+pattern TAILCALL = 16
 
 --función util para debugging: muestra el Bytecode de forma más legible.
 showOps :: Bytecode -> [String]
@@ -89,6 +90,7 @@ showOps (CONST:i:xs)     = ("CONST " ++  show i) : showOps xs
 showOps (ACCESS:i:xs)    = ("ACCESS " ++ show i) : showOps xs
 showOps (FUNCTION:i:xs)  = ("FUNCTION len=" ++ show i) : showOps xs
 showOps (CALL:xs)        = "CALL" : showOps xs
+showOps (TAILCALL:xs)    = "TAILCALL" : showOps xs
 showOps (ADD:xs)         = "ADD" : showOps xs
 showOps (SUB:xs)         = "SUB" : showOps xs
 showOps (IFZ:xs)         = "IFZ" : showOps xs
@@ -106,41 +108,75 @@ showOps (x:xs)           = show x : showOps xs
 showBC :: Bytecode -> String
 showBC = intercalate "; " . showOps
 
-bcc :: MonadFD4 m => TTerm -> m Bytecode
-bcc (V _ (Bound n)) = return [ACCESS,n]
-bcc (V _ (Free nm)) = failFD4 "Las variables libres deberian transformarse a indices de de Bruijn"
-bcc (V _ (Global nm)) = failFD4 "Las variables globales deberian transformarse a indices de de Bruijn"
-bcc (Const _ (CNat n)) = return [CONST,n]
-bcc (Lam _ _ _ (Sc1 s)) = 
-  do s' <- bcc s
-     return $ [FUNCTION, length s' + 1]++s'++[RETURN]
-bcc (App _ l r) = 
-  do l' <- bcc l
-     r' <- bcc r
-     return $ l'++r'++[CALL]
-bcc (Print _ str t) = 
-  do t' <- bcc t
-     return $ t'++[PRINT]++string2bc str++[NULL]
-bcc (BinaryOp _ Add l r) = 
-  do l' <- bcc l
-     r' <- bcc r
-     return $ l'++r'++[ADD]
-bcc (BinaryOp _ Sub l r) = 
-  do l' <- bcc l
-     r' <- bcc r
-     return $ l'++r'++[SUB]
-bcc (Fix _ _ _ _ _ (Sc2 s)) = 
-  do s' <- bcc s
-     return $ [FUNCTION, length s' + 1] ++ s' ++ [RETURN, FIX]
-bcc (IfZ _ c t e) =
-  do c' <- bcc c
-     t' <- bcc t
-     e' <- bcc e
+bcd :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
+bcd ms (Let _ nm _ e1 (Sc1 e2)) =
+  do e1' <- bcc ms e1
+     case nm of
+       "_" -> do e2' <- bcc (1:ms) e2 
+                 return $ e1'++[SHIFT,DROP]++e2'
+       _ -> do e2' <- bcc (0:ms) e2
+               return $ e1'++[SHIFT]++e2'++[DROP]
+bcd ms t = bcc ms t
+
+bct :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
+bct ms (App _ l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
+     return $ l'++r'++[TAILCALL]
+bct ms (IfZ _ c t e) =
+  do c' <- bcd ms c
+     t' <- bct ms t
+     e' <- bct ms e
      return $ c' ++ [IFZ, length t'+2] ++ t' ++ [JUMP, length e'] ++ e'
-bcc (Let _ _ _ e1 (Sc1 e2)) = 
-  do e1' <- bcc e1
-     e2' <- bcc e2
-     return $ e1'++[SHIFT]++e2'++[DROP]
+bct ms (Let _ nm _ e1 (Sc1 e2)) = 
+  do e1' <- bcc ms e1
+     case nm of
+       "_" -> do e2' <- bct (1:ms) e2 
+                 return $ e1'++[SHIFT,DROP]++e2'
+       _ -> do e2' <- bct (0:ms) e2
+               return $ e1'++[SHIFT]++e2'
+bct ms t = do t' <- bcc ms t
+              return $ t'++[RETURN]
+
+bcc :: MonadFD4 m => [Int] -> TTerm -> m Bytecode
+bcc ms (V _ (Bound n)) = let m = sum (take n ms)
+                         in return [ACCESS,n-m]
+bcc _ (V _ (Free nm)) = failFD4 "Las variables libres deberian transformarse a indices de de Bruijn"
+bcc _ (V _ (Global nm)) = failFD4 "Las variables globales deberian transformarse a indices de de Bruijn"
+bcc _ (Const _ (CNat n)) = return [CONST,n]
+bcc ms (Lam _ _ _ (Sc1 s)) = 
+  do s' <- bct ms s
+     return $ [FUNCTION, length s']++s'
+bcc ms (App _ l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
+     return $ l'++r'++[CALL]
+bcc ms (Print _ str t) = 
+  do t' <- bcc ms t
+     return $ t'++[PRINT]++string2bc str++[NULL]++[PRINTN]
+bcc ms (BinaryOp _ Add l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
+     return $ l'++r'++[ADD]
+bcc ms (BinaryOp _ Sub l r) = 
+  do l' <- bcd ms l
+     r' <- bcc ms r
+     return $ l'++r'++[SUB]
+bcc ms (Fix _ _ _ _ _ (Sc2 s)) = 
+  do s' <- bcc ms s
+     return $ [FUNCTION, length s' + 1] ++ s' ++ [RETURN, FIX]
+bcc ms (IfZ _ c t e) =
+  do c' <- bcd ms c
+     t' <- bcc ms t
+     e' <- bcc ms e
+     return $ c' ++ [IFZ, length t'+2] ++ t' ++ [JUMP, length e'] ++ e'
+bcc ms (Let _ nm _ e1 (Sc1 e2)) = 
+  do e1' <- bcc ms e1
+     case nm of
+       "_" -> do e2' <- bcc (1:ms) e2 
+                 return $ e1'++[SHIFT,DROP]++e2'
+       _ -> do e2' <- bcc (0:ms) e2
+               return $ e1'++[SHIFT]++e2'
 
 -- ord/chr devuelven los codepoints unicode, o en otras palabras
 -- la codificación UTF-32 del caracter.
@@ -169,7 +205,8 @@ translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n 
 translate (DeclTy _ _ b:ds) = translate ds
 
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode
-bytecompileModule m = do bc <- (bcc . translate) m
+bytecompileModule m = do bc <- (bcc [] . translate) m
+                         --error $ showBC bc
                          return $ bc ++ [STOP]
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo
@@ -187,26 +224,27 @@ bcRead filename = (map fromIntegral <$> un32) . decode <$> BS.readFile filename
 runBC :: MonadFD4 m => Bytecode -> m ()
 runBC bc = go (bc, [], [])
   where go :: MonadFD4 m => (Bytecode, [Val], [Val]) -> m ()
-        go (CONST:n:c, e, s) = go (c, e, N n:s)
-        go (ADD:c, e, N m:N n:s) = go (c, e, N (m+n):s)
-        go (SUB:c, e, N m:N n:s) = go (c, e, N (max (n-m) 0):s)
-        go (ACCESS:i:c, e, s) = go (c, e, e!!i:s)
-        go (CALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, RA (e,c):s)
+        go (CONST:n:c, e, s) = addOp >> go (c, e, N n:s)
+        go (ADD:c, e, N m:N n:s) = setMem (length s + 2) >> addOp >> go (c, e, N (m+n):s)
+        go (SUB:c, e, N m:N n:s) = setMem (length s + 2) >> addOp >> go (c, e, N (max (n-m) 0):s)
+        go (ACCESS:i:c, e, s) = addOp >> go (c, e, e!!i:s)
+        go (CALL:c, e, v:C (ef,cf):s) = setMem (length s + 2) >> addClos >> addOp >> go (cf, v:ef, RA (e,c):s)
+        go (TAILCALL:c, e, v:C (ef,cf):s) = setMem (length s + 2) >> addClos >> addOp >> go (cf, v:ef, s)
         go (FUNCTION:n:c, e, s) = let (f,c') = splitAt n c
-                                  in go (c', e, C (e, f):s)
-        go (RETURN:_, _, v:RA (e,c):s) = go (c, e, v:s)
+                                  in addOp >> go (c', e, C (e, f):s)
+        go (RETURN:_, _, v:RA (e,c):s) = setMem (length s + 2) >> addClos >> addOp >> go (c, e, v:s)
         go (FIX:c, e, C (ef,cf):s) = let efix = C (efix, cf):ef
-                                     in go (c, e, C (efix, cf):s)
-        go (SHIFT:c, e, v:s) = go (c, v:e, s)
-        go (DROP:c, _:e, s) = go (c, e, s)
-        -- go (PRINTN:c, e, N n:s) = do printFD4 (show n)
-        --                              go (c, e, N n:s)
-        go (PRINT:c, e, N n:s) = do let (str,_:c') = span (/=NULL) c
-                                    printFD4 $ bc2string str ++ show n
-                                    go (c', e, N n:s)
+                                     in setMem (length s + 1) >> addClos >> addOp >> go (c, e, C (efix, cf):s)
+        go (SHIFT:c, e, v:s) = setMem (length s + 1) >> addOp >> go (c, v:e, s)
+        go (DROP:c, _:e, s) = addOp >> go (c, e, s)
+        go (PRINTN:c, e, N n:s) = do printFD4 (show n)
+                                     setMem (length s + 1) >> addOp >> go (c, e, N n:s)
+        go (PRINT:c, e, s) = do let (str,_:c') = span (/=NULL) c
+                                printStrFD4 $ bc2string str
+                                addOp >> go (c', e, s)
         go (IFZ:l:c, e, N n:s) = if n == 0
-                                 then go (c, e, s)
-                                 else go (drop l c, e, s)
-        go (JUMP:n:c, e, s) = go (drop n c, e, s)
-        go (STOP:_, _, _) = return ()
+                                 then setMem (length s + 1) >> addOp >> go (c, e, s)
+                                 else setMem (length s + 1) >> addOp >> go (drop l c, e, s)
+        go (JUMP:n:c, e, s) = addOp >> go (drop n c, e, s)
+        go (STOP:_, _, _) = addOp
         go (c, _, _) = error $ "Patron no reconocido: " ++ showBC c
