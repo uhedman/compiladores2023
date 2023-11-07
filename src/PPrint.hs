@@ -14,7 +14,8 @@ module PPrint (
     pp,
     ppTy,
     ppName,
-    ppDecl
+    ppDecl,
+    ppStats
     ) where
 
 import Lang
@@ -33,9 +34,10 @@ import Prettyprinter
       sep,
       parens,
       Doc,
-      Pretty(pretty) )
+      Pretty(pretty), 
+      vcat )
 import MonadFD4 ( gets, MonadFD4 )
-import Global ( GlEnv(glb) )
+import Global
 
 freshen :: [Name] -> Name -> Name
 freshen ns n = let cands = n : map (\i -> n ++ show i) [0..] 
@@ -102,7 +104,7 @@ ppName = id
 -- | Pretty printer para tipos (Doc)
 sty2doc :: STy -> Doc AnsiStyle
 sty2doc SNatTy = typeColor (pretty "Nat")
-sty2doc (Syn var) = nameColor (pretty var)
+sty2doc (Syn var) = typeColor (pretty var)
 sty2doc (SFun x@(SFun _ _) y) = sep [parens (sty2doc x), typeOpColor (pretty "->"),sty2doc y]
 sty2doc (SFun x y) = sep [sty2doc x, typeOpColor (pretty "->"),sty2doc y] 
 
@@ -147,7 +149,8 @@ t2doc at (SLam p binds t) =
   sep [sep [ keywordColor (pretty "fun")
            , bindings2doc binds
            , opColor(pretty "->")]
-      , nest 2 (t2doc False t)]
+      , nest 2 (t2doc False t)
+      ]
 
 t2doc at t@(SApp _ _ _) =
   let (h, ts) = collectApp t in
@@ -157,16 +160,17 @@ t2doc at t@(SApp _ _ _) =
 t2doc at (SFix _ (f,fty) (x,xty) binds m) = -- Wip
   parenIf at $
   sep [ sep [keywordColor (pretty "fix")
-                  , bindings2doc ((f, fty):(x,xty):binds)
-                  , opColor (pretty "->") ]
+            , bindings2doc ((f, fty):(x,xty):binds)
+            , opColor (pretty "->") ]
       , nest 2 (t2doc False m)
       ]
 
 t2doc at (SIfZ _ c t e) =
   parenIf at $
-  sep [keywordColor (pretty "ifz"), nest 2 (t2doc False c)
-     , keywordColor (pretty "then"), nest 2 (t2doc False t)
-     , keywordColor (pretty "else"), nest 2 (t2doc False e) ]
+  sep [ keywordColor (pretty "ifz"), nest 2 (t2doc False c)
+      , keywordColor (pretty "then"), nest 2 (t2doc False t)
+      , keywordColor (pretty "else"), nest 2 (t2doc False e) 
+      ]
 
 t2doc at (SPrint _ str t) =
   parenIf at $
@@ -176,13 +180,14 @@ t2doc at (SLetLam _ recBool binds (v,ty) t t') = -- Wip
   parenIf at $
   sep [
     sep [keywordColor (pretty "let")
-       , names2doc [v]
-       , bindings2doc binds
-       , sty2doc ty
-       , opColor (pretty "=") ]
-  , nest 2 (t2doc False t)
-  , keywordColor (pretty "in")
-  , nest 2 (t2doc False t') ]
+        , names2doc [v]
+        , bindings2doc binds
+        , sty2doc ty
+        , opColor (pretty "=") ]
+    , nest 2 (t2doc False t)
+    , keywordColor (pretty "in")
+    , nest 2 (t2doc False t') 
+    ]
 
 t2doc at (SLetVar _ (v,ty) t t') =
   parenIf at $
@@ -192,7 +197,8 @@ t2doc at (SLetVar _ (v,ty) t t') =
        , opColor (pretty "=") ]
   , nest 2 (t2doc False t)
   , keywordColor (pretty "in")
-  , nest 2 (t2doc False t') ]
+  , nest 2 (t2doc False t') 
+  ]
 
 t2doc at (SBinaryOp _ o a b) =
   parenIf at $
@@ -229,7 +235,18 @@ ppDecl (Decl p x t) = do
                    <+> nest 2 (t2doc False (openAll fst (map declName gdecl) t)))
 ppDecl (DeclTy p x t) = do 
   gdecl <- gets glb
-  return (render $ sep [defColor (pretty "type")
-                       , names2doc [x] 
+  return (render $ sep [ defColor (pretty "type")
+                       , sty2doc (Syn x) 
                        , defColor (pretty "=")
                        , ty2doc t])
+
+-- | Pretty printing de estadisticas
+ppStats :: Statistics -> String
+ppStats st = let Statistics { steps = s, ops = o, mem = m, clos = c } = st
+                 statsDoc = vcat [ pretty "Estadisticas de ejecucion:"
+                                 , pretty "Pasos:" <+> constColor (pretty (show s))
+                                 , pretty "Operaciones:" <+> constColor (pretty (show o))
+                                 , pretty "Uso de memoria:" <+> constColor (pretty (show m))
+                                 , pretty "Numero de clausuras:" <+> constColor (pretty (show c))
+                                 ]
+             in render statsDoc

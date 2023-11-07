@@ -1,4 +1,4 @@
-/* La Verdadera Macchina */
+/* La Verdadera Macchina en 8 bits*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +15,7 @@
 #define STATIC_ASSERT(p)			\
 	void _ass_ ## __FILE__ ## __LINE__ (char v[(p) ? 1 : -1])
 
-/* Necesitamos que un uint32_t (i.e. una instrucción) entre en un int. */
+/* Necesitamos que un uint32_t (i.e. un valor) entre en un int. */
 STATIC_ASSERT(sizeof (int) >= sizeof (uint32_t));
 
 /* Habilitar impresión de traza? */
@@ -55,7 +55,7 @@ enum {
  * recorre opcode a opcode operando en la stack. Las más interesantes
  * involucran saltos y la construcción de clausuras.
  */
-typedef uint32_t *code;
+typedef uint8_t *code;
 
 /*
  * Un entorno es una lista enlazada de valores. Representan los valores
@@ -212,13 +212,21 @@ void run(code init_c)
 		switch(*c++) {
 		case ACCESS: {
 			/* Una variable: la leemos del entorno y la ponemos en la pila */
-			(*s++) = env_nth(e, *c++);
+			uint32_t nth = 0;
+			for (int i = 0; i < 4; ++i)
+				nth = (nth << 8) | *c++;
+
+			(*s++) = env_nth(e, nth);
 			break;
 		}
 
 		case CONST: {
 			/* Una constante: la leemos y la ponemos en la pila */
-			(*s++).i = *c++;
+			uint32_t nth = 0;
+			for (int i = 0; i < 4; ++i)
+				nth = (nth << 8) | *c++;
+
+			(*s++).i = nth;
 			break;
 		}
 
@@ -313,7 +321,9 @@ void run(code init_c)
 			 * incluye la longitud del cuerpo del lambda en
 			 * el entero siguiente, así que lo consumimos.
 			 */
-			int leng = *c++;
+			int leng = 0;
+			for (int i = 0; i < 4; ++i)
+				leng = (leng << 8) | *c++;
 
 			/* Ahora sí, armamos la clausura */
 			struct clo clo = {
@@ -332,7 +342,9 @@ void run(code init_c)
 
 		case IFZ: {
 			value val = *--s;
-			uint32_t len = *c++;
+			uint32_t len = 0;
+			for (int i = 0; i < 4; ++i)
+				len = (len << 8) | *c++;
 
 			if (val.i != 0) {
 				/* Saltar */
@@ -343,7 +355,9 @@ void run(code init_c)
 		}
 
 		case JUMP: {
-			uint32_t len = *c++;
+			uint32_t len = 0;
+			for (int i = 0; i < 4; ++i)
+				len = (len << 8) | *c++;
 			
 			/* Saltar */
 			c += len; 

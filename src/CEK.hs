@@ -11,7 +11,7 @@ Stability   : experimental
 module CEK where
 
 import Lang
-import MonadFD4 ( MonadFD4, printFD4, failFD4, failPosFD4, lookupDecl )
+import MonadFD4
 import Common ( Pos )
 import Subst ( close, close2 )
 import PPrint ( pp )
@@ -48,42 +48,42 @@ evalCEK t = do t' <- seek t [] []
                return $ val2tterm t'
 
 seek :: MonadFD4 m => TTerm -> Env -> Kont -> m Val
-seek (Print _ s t) env k = seek t env (FrPrint s:k)
-seek (BinaryOp _ op t u) env k = seek t env (FrBOpL env op u:k)
-seek (IfZ _ c t e) env k = seek c env (FrIfz env t e:k)
-seek (App _ t u) env k = seek t env (FrApp env u:k)
+seek (Print _ s t) env k = addStep >> seek t env (FrPrint s:k)
+seek (BinaryOp _ op t u) env k = addStep >> seek t env (FrBOpL env op u:k)
+seek (IfZ _ c t e) env k = addStep >> seek c env (FrIfz env t e:k)
+seek (App _ t u) env k = addStep >> seek t env (FrApp env u:k)
 seek (V (p,_) (Free n)) env k = failPosFD4 p "Variable libre deberia ser indice de De Bruijn"
 seek (V (p,_) (Bound i)) env k = 
   case nth i env of
     Nothing -> failPosFD4 p "Variable no encontrada"
-    Just v -> destroy v k
+    Just v -> addStep >> destroy v k
 seek (V (p,_) (Global n)) env k = 
   do res <- lookupDecl n
      case res of
        Nothing -> failPosFD4 p  "Variable no encontrada"
-       Just v -> seek v env k
-seek (Const i (CNat n)) env k = destroy (Nat i n) k
+       Just v -> addStep >> seek v env k
+seek (Const i (CNat n)) env k = addStep >> destroy (Nat i n) k
 seek (Lam i x xty (Sc1 t)) env k = 
-  destroy (Clos (ClFun i env x xty t)) k
+  addStep >> destroy (Clos (ClFun i env x xty t)) k
 seek (Fix i f fty x xty (Sc2 t)) env k = 
-  destroy (Clos (ClFix i env f fty x xty t)) k
+  addStep >> destroy (Clos (ClFix i env f fty x xty t)) k
 seek (Let _ _ _ s (Sc1 t)) env k = 
-  seek s env (FrLet env t:k)
+  addStep >> seek s env (FrLet env t:k)
 
 destroy :: MonadFD4 m => Val -> Kont -> m Val
 destroy v (FrPrint s:k) = 
   do vs <- val2string v
      printFD4 $ s ++ vs
      destroy v k
-destroy (Nat i n) (FrBOpL env op u:k) = seek u env (FrBOpR (Nat i n) op:k)
-destroy (Nat i' n') (FrBOpR (Nat i n) op:k) = destroy (evalOp op (Nat i n) (Nat i' n')) k
-destroy (Nat i 0) (FrIfz env t e:k) = seek t env k
-destroy (Nat i np) (FrIfz env t e:k) = seek e env k
-destroy (Clos c) (FrApp env t:k) = seek t env (FrClos c:k)
-destroy v (FrClos (ClFun i env x xty t):k) = seek t (v:env) k
-destroy v (FrClos (ClFix i env f fty x xty t):k) = seek t (v:Clos (ClFix i env f fty x xty t):env) k
-destroy v (FrLet env t:k) = seek t (v:env) k
-destroy v [] = return v
+destroy (Nat i n) (FrBOpL env op u:k) = addStep >> seek u env (FrBOpR (Nat i n) op:k)
+destroy (Nat i' n') (FrBOpR (Nat i n) op:k) = addStep >>  destroy (evalOp op (Nat i n) (Nat i' n')) k
+destroy (Nat i 0) (FrIfz env t e:k) = addStep >> seek t env k
+destroy (Nat i np) (FrIfz env t e:k) = addStep >> seek e env k
+destroy (Clos c) (FrApp env t:k) = addStep >> seek t env (FrClos c:k)
+destroy v (FrClos (ClFun i env x xty t):k) = addStep >> seek t (v:env) k
+destroy v (FrClos (ClFix i env f fty x xty t):k) = addStep >> seek t (v:Clos (ClFix i env f fty x xty t):env) k
+destroy v (FrLet env t:k) = addStep >> seek t (v:env) k
+destroy v [] = addStep >> return v
 destroy _ _ = failFD4 "Argumentos invalidos en destroy"
 
 -- Funciones auxiliares

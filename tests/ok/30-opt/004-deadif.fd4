@@ -1,0 +1,1 @@
+let y:Nat = ifz 0 then 1 else 2

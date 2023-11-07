@@ -18,8 +18,19 @@ data GlEnv = GlEnv {
   lfile :: String,      -- ^ Último archivo cargado.
   cantDecl :: Int,      -- ^ Cantidad de declaraciones desde la última carga
   glb :: [Decl TTerm],  -- ^ Entorno con declaraciones globales
-  env :: [(Name, Ty)]   -- ^ Entorno con declaraciones de tipos globales
+  env :: [(Name, Ty)],  -- ^ Entorno con declaraciones de tipos globales
+  stats :: Statistics   -- ^ Estadisticas del programa
 }
+
+data Statistics = Statistics {
+  steps :: Int, -- Cantidad de pasos requeridos para ejecutar el programa
+  ops :: Int,   -- Cantidad de operaciones ejecutadas
+  mem :: Int,   -- Tamaño maximo que llego a ocupar el stack
+  clos :: Int   -- Cantidad total de clausuras creadas durante la ejecucion
+}
+
+initStats :: Statistics
+initStats = Statistics 0 0 0 0
 
 -- ^ Entorno de tipado de declaraciones globales
 tyEnv :: GlEnv ->  [(Name,Ty)]
@@ -41,11 +52,12 @@ data Mode =
   -- | Assembler
   -- | Build
 data Conf = Conf {
-    opt :: Bool,          --  ^ True, si estan habilitadas las optimizaciones.
-    cek :: Bool,          --  ^ True, si se utiliza la CEK.
+    opt  :: Bool,          --  ^ True, si estan habilitadas las optimizaciones.
+    cek  :: Bool,          --  ^ True, si se utiliza la CEK.
+    prof :: Bool,          --  ^ True, si se quieren conseguir las metricas.
     modo :: Mode
 }
 
 -- | Valor del estado inicial
 initialEnv :: GlEnv
-initialEnv = GlEnv False "" 0 [] []
+initialEnv = GlEnv False "" 0 [] [] initStats

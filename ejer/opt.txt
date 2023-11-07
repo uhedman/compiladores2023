@@ -1,0 +1,90 @@
+Por induccion en la entrada
+Sea bcc el compilador nuevo y bcc' el viejo
+Casos base:
+bcc Bound n = [ACCESS,n] = bcc' Bound n
+bcc Const n = [CONST,n] = bcc' Const n
+Casos inductivos:
+bcc Lam s = 
+    [FUNCTION, length (bct s) + 1]++bct s++[RETURN]
+    <=(Lema 1)
+    [FUNCTION, length (bcc' s) + 1]++bcc' s++[RETURN]
+    =
+bcc' Lam s
+
+bcc App l r = 
+    bcd l++bcc r++[CALL]
+    <=(HI, Lema 2)
+    bcc' l++bcc' r++[CALL]
+    =
+bcc' App l r
+
+bcc Print str t = 
+    bcc t++[PRINT]++string2bc str++[NULL]++[PRINTN]
+    <=(HI)
+    bcc' t++[PRINT]++string2bc str++[NULL]++[PRINTN]
+    =
+bcc' Print str t
+
+bcc BinaryOp Add l r = 
+    bcd l++bcc r++[ADD]
+    <=(HI, Lema 2)
+    bcc' l++bcc' r++[ADD]
+    =
+bcc' BinaryOp Add l r
+
+bcc BinaryOp Sub l r = 
+    bcd l++bcc r++[SUB]
+    <=(HI, Lema 2)
+    bcc' l++bcc' r++[SUB]
+    =
+bcc' BinaryOp Sub l r
+
+bcc Fix s = 
+    [FUNCTION, length s' + 1] ++ bcc s ++ [RETURN, FIX]
+    <=(HI)
+    [FUNCTION, length s' + 1] ++ bcc' s ++ [RETURN, FIX]
+    =
+bcc' Fix s = 
+
+bcc IfZ c t e = 
+    bcd c ++ [IFZ, length (bcc t)+2] ++ bcc t ++ [JUMP, length e'] ++ bcc e
+    <=(HI, Lema 2)
+    bcc' c ++ [IFZ, length (bcc t)+2] ++ bcc' t ++ [JUMP, length e'] ++ bcc' e
+    =
+bcc' IfZ c t e
+
+
+bcc Let e1 e2 = 
+    bcc e1++[SHIFT]++bcc e2 
+    <=(HI) 
+    bcc' e1++[SHIFT]++bcc' e2++[DROP]
+    =
+bcc' Let e1 e2 
+
+Lema 1
+bcd x <= bcc' x
+Casos base:
+bcd Bound n = bcc' Bound n 
+bcd Const n = bcc' Const n 
+Casos inductivos:
+bcd Let e1 e2 = 
+    bcc e1++[SHIFT]++bcc e2++[DROP]
+    <=(HI) 
+    bcc' e1++[SHIFT]++bcc' e2++[DROP]
+    =
+bcc' Let e1 e2 
+bcd t = bcc' t
+
+Lema 2
+bct x <= bcc' x
+Casos base:
+bct Bound n = bcc' Bound n 
+bct Const n = bcc' Const n 
+Casos inductivos:
+bct App l r = 
+    bcd e1++bcc' e2++[TAILCALL]
+    <=(Lema 1) 
+    bcc' e1++bcc' e2++[CALL]
+    =
+bcc' App l r 
+bcd t = bcc' t

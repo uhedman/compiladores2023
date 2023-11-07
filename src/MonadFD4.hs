@@ -3,6 +3,7 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use <$>" #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-|
 Module      : MonadFD4
@@ -18,10 +19,13 @@ y la mónada 'FD4' que provee una instancia de esta clase.
 
 module MonadFD4 (
   FD4,
+  FD4Prof,
   runFD4,
+  runFD4Prof,
   lookupDecl,
   lookupTy,
   printFD4,
+  printStrFD4,
   setLastFile,
   getLastFile,
   setInter,
@@ -29,13 +33,16 @@ module MonadFD4 (
   getMode,
   getOpt,
   getCek,
+  getProf,
+  getStats,
+  resetStats,
   eraseLastFileDecls,
   failPosFD4,
   failFD4,
   addDecl,
   addTy,
   catchErrors,
-  MonadFD4,
+  MonadFD4( addStep, addOp, setMem, addClos ),
   module Control.Monad.Except,
   module Control.Monad.State)
  where
@@ -67,12 +74,19 @@ y otras operaciones derivadas de ellas, como por ejemplo
    - @gets :: (GlEnv -> a) -> m a@  
 -}
 class (MonadIO m, MonadState GlEnv m, MonadError Error m, MonadReader Conf m) => MonadFD4 m where
+  addStep :: m ()
+  addOp :: m ()
+  setMem :: Int -> m ()
+  addClos :: m ()
 
 getOpt :: MonadFD4 m => m Bool
 getOpt = asks opt
 
 getCek :: MonadFD4 m => m Bool
 getCek = asks cek
+
+getProf :: MonadFD4 m => m Bool
+getProf = asks prof
 
 getMode :: MonadFD4 m => m Mode
 getMode = asks modo
@@ -83,8 +97,17 @@ setInter b = modify (\s-> s {inter = b})
 getInter :: MonadFD4 m => m Bool
 getInter = gets inter
 
+getStats :: MonadFD4 m => m Statistics
+getStats = gets stats
+
+resetStats :: MonadFD4 m => m ()
+resetStats = modify (\s-> s {stats = Statistics 0 0 0 0})
+
 printFD4 :: MonadFD4 m => String -> m ()
 printFD4 = liftIO . putStrLn
+
+printStrFD4 :: MonadFD4 m => String -> m ()
+printStrFD4 = liftIO . putStr
 
 setLastFile :: MonadFD4 m => FilePath -> m ()
 setLastFile filename = modify (\s -> s {lfile = filename , cantDecl = 0})
@@ -109,12 +132,12 @@ lookupDecl :: MonadFD4 m => Name -> m (Maybe TTerm)
 lookupDecl nm = do
      s <- get
      case filter (hasName nm) (glb s) of
-       (Decl { declBody=e }):_ -> return (Just e)
-       (DeclTy {}):_ -> return Nothing
+       Decl { declBody=e }:_ -> return (Just e)
+       DeclTy {}:_ -> return Nothing
        [] -> return Nothing
    where hasName :: Name -> Decl a -> Bool
-         hasName nm (Decl { declName = nm' }) = nm == nm'
-         hasName nm (DeclTy { declName = nm' }) = nm == nm'
+         hasName nm Decl { declName = nm' } = nm == nm'
+         hasName nm DeclTy { declName = nm' } = nm == nm'
 
 lookupTy :: MonadFD4 m => Name -> m (Maybe Ty)
 lookupTy nm = do
@@ -141,13 +164,37 @@ catchErrors c = catchError (Just <$> c)
 -- El transformador de mónad @ExcepT Error@ agrega a la mónada IO la posibilidad de manejar errores de tipo 'Errors.Error'.
 -- El transformador de mónadas @StateT GlEnv@ agrega la mónada @ExcepT Error IO@ la posibilidad de manejar un estado de tipo 'Global.GlEnv'.
 type FD4 = ReaderT Conf (StateT GlEnv (ExceptT Error IO))
+type FD4Prof = StateT GlEnv (ReaderT Conf (ExceptT Error IO))
 
--- | Esta es una instancia vacía, ya que 'MonadFD4' no tiene funciones miembro.
-instance MonadFD4 FD4
+instance MonadFD4 FD4 where
+  addStep :: FD4 ()
+  addStep = return ()
+  addOp :: FD4 ()
+  addOp = return ()
+  setMem :: Int -> FD4 ()
+  setMem m = return ()
+  addClos :: FD4 ()
+  addClos = return ()
+
+instance MonadFD4 FD4Prof where
+  addStep :: FD4Prof ()
+  addStep = modify (\s-> s {stats = (stats s) {steps = steps (stats s) + 1}})
+  addOp :: FD4Prof ()
+  addOp = modify (\s-> s {stats = (stats s) {ops = ops (stats s) + 1}})
+  setMem :: Int -> FD4Prof ()
+  setMem m = modify (\s-> s {stats = (stats s) {mem = max m (mem (stats s))}})
+  addClos :: FD4Prof ()
+  addClos = modify (\s-> s {stats = (stats s) {clos = clos (stats s) + 1}})
 
 -- 'runFD4\'' corre una computación de la mónad 'FD4' en el estado inicial 'Global.initialEnv' 
 runFD4' :: FD4 a -> Conf -> IO (Either Error (a, GlEnv))
-runFD4' c conf =  runExceptT $ runStateT (runReaderT c conf)  initialEnv
+runFD4' c conf = runExceptT $ runStateT (runReaderT c conf) initialEnv
 
 runFD4:: FD4 a -> Conf -> IO (Either Error a)
 runFD4 c conf = fmap fst <$> runFD4' c conf
+
+runFD4Prof' :: FD4Prof a -> Conf -> IO (Either Error (a, GlEnv))
+runFD4Prof' c conf = runExceptT $ runReaderT (runStateT c initialEnv) conf
+
+runFD4Prof:: FD4Prof a -> Conf -> IO (Either Error a)
+runFD4Prof c conf = fmap fst <$> runFD4Prof' c conf
