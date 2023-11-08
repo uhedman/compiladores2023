@@ -40,6 +40,9 @@ import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
 import Optimize ( optimizeDecl )
 import System.FilePath ( dropExtension )
 import qualified Control.Monad
+import C (ir2C)
+import IR (IrDecl, IrDecls (IrDecls))
+import ClosureConvert (convert, runCC)
 
 prompt :: String
 prompt = "FD4> "
@@ -80,6 +83,9 @@ main = execParser opts >>= go
     go (Bytecompile,opt,cek,prof,files) =
       if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ bytecompileFile files
               else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ bytecompileFile files
+    go (CC,opt,cek,prof,files) =
+      if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ ccompileFile files
+              else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ ccompileFile files
     go (RunVM,opt,cek,prof,files) =
       if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ runVMFile files
               else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ runVMFile files
@@ -149,6 +155,21 @@ bytecompileFile f = do
                        (DeclTy _ x ty) -> do addTy x ty
                                              return td
 
+ccompileFile :: MonadFD4 m => FilePath -> m ()
+ccompileFile f = do
+  decls <- loadFile f
+  tds <- mapM aux decls
+  c <- runCC tds
+  liftIO $ writeFile (dropExtension f ++ ".c") (ir2C (IrDecls c))-- liftIO?
+    where aux d = do td <- typecheckDecl d
+                     case td of
+                       Decl {} -> do opt <- getOpt
+                                     td' <- if opt then optimizeDecl td else return td
+                                     addDecl td'
+                                     return td'
+                       (DeclTy _ x ty) -> do addTy x ty
+                                             return td
+
 compileFile ::  MonadFD4 m => FilePath -> m ()
 compileFile f = do
     i <- getInter
@@ -209,6 +230,17 @@ handleDecl d = do
               ppterm <- ppDecl td'
               printFD4 ppterm
           Eval -> do
+              td <- typecheckDecl d
+              opt <- getOpt
+              td' <- if opt then optimizeDecl td else return td
+              cek <- getCek
+              ed <- if cek then evalDeclCek td' else evalDecl td'
+              addDecl' ed
+              prof <- getProf
+              when prof (do stats <- getStats
+                            printFD4 (ppStats stats)
+                            resetStats)
+          CC -> do
               td <- typecheckDecl d
               opt <- getOpt
               td' <- if opt then optimizeDecl td else return td

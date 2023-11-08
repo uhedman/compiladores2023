@@ -45,6 +45,20 @@ convert (Let _ x ty def body) =
      body' <- convert (open x body)
      return $ IrLet x (ty2ir ty) def' body'
 
+runCC :: MonadFD4 m => [Decl TTerm] -> m [IrDecl]
+runCC = sequence $ map runCC'
+
+runCC' :: Decl TTerm -> StateT Int (Writer [IrDecl]) IrDecl
+runCC' (Decl _ name body) = do
+  st <- get
+  ir <- convert body
+  put st
+  case ir of
+    (IrGlobal nm) -> pure IrFun-- ??
+    (IrVar nm) -> pure IrVal-- ??
+    _ -> error -- ??
+runCC' DeclTy {} = error "No se soportan sinonimos de tipo"
+
 -- Funciones auxiliares
 collectFreeVars :: TTerm -> [Name]
 collectFreeVars (V _ (Free n)) = [n]
