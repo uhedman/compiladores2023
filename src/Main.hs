@@ -41,8 +41,8 @@ import Optimize ( optimizeDecl )
 import System.FilePath ( dropExtension )
 import qualified Control.Monad
 import C (ir2C)
-import IR (IrDecl, IrDecls (IrDecls))
-import ClosureConvert (convert, runCC)
+import IR (IrDecls (IrDecls))
+import ClosureConvert (runCC)
 
 prompt :: String
 prompt = "FD4> "
