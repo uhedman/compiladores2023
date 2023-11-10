@@ -6,7 +6,7 @@ import Control.Monad.Writer
 import Control.Monad.State
 import Subst ( open, open2 )
 import Data.List (nub)
-import MonadFD4 (MonadFD4)
+import MonadFD4 (MonadFD4, printFD4)
 
 -- Closure convert y hoisting
 convert :: TTerm -> StateT Int (Writer [IrDecl]) Ir
@@ -46,11 +46,17 @@ convert (Let _ x ty def body) =
      return $ IrLet x (ty2ir ty) def' body'
 
 convertDecl :: Decl TTerm -> StateT Int (Writer [IrDecl]) Ir
-convertDecl (Decl _ _ body) = convert body    
+convertDecl (Decl _ x body) = do b <- convert body
+                                 case b of
+                                   MkClosure {} -> return ()
+                                   _ -> tell [IrVal x IrInt b]
+                                 return b
 convertDecl DeclTy {} = error "No se soportan sinonimos de tipo" 
 
 runCC :: MonadFD4 m => [Decl TTerm] -> m [IrDecl]
-runCC decls = return $ snd $ runWriter (runStateT (mapM convertDecl decls) 0)
+runCC decls = do let ird = snd $ runWriter (runStateT (mapM convertDecl decls) 0)
+                --  printFD4 $ show ird
+                 return ird
 
 -- Funciones auxiliares
 collectFreeVars :: TTerm -> [Name]
