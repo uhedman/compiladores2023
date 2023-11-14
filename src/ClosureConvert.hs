@@ -16,11 +16,12 @@ convert (V _ (Free n)) list = case lookup n list of
 convert (V _ (Global n)) _ = return $ IrGlobal n
 convert (Const _ c) _ = return $ IrConst c
 convert (Lam (_,ty) x xty body) list = 
-  do funName <- getFunName
+  do funName1 <- getFunName
+     funName2 <- getFreshName
      cloName <- getFreshName
      let ir = IrAccess (IrVar cloName) (ty2ir xty) 0
      closureBody <- convert (open x body) ((x,ir):list)
-     tell [IrFun funName (ty2ir (getCod ty)) [(funName, IrFunTy), (cloName, IrClo)] closureBody]
+     tell [IrFun funName1 (ty2ir (getCod ty)) [(funName2, IrFunTy), (cloName, IrClo)] closureBody]
      return (MkClosure x [closureBody])
 convert (App (_,ty) l r) list = 
   do funcIr <- convert l list
