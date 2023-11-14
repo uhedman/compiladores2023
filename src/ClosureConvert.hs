@@ -4,52 +4,56 @@ import IR
 import Lang
 import Control.Monad.Writer
 import Control.Monad.State
-import Subst ( open, open2 )
-import Data.List (nub)
-import MonadFD4 (MonadFD4, printFD4)
+import Subst ( open ) --, open2 )
+import MonadFD4 (MonadFD4)
 
 -- Closure convert y hoisting
-convert :: TTerm -> StateT Int (Writer [IrDecl]) Ir
-convert (V _ Bound {}) = error "No se esperaban variables ligadas" 
-convert (V _ (Free n)) = return $ IrVar n
-convert (V _ (Global n)) = return $ IrGlobal n
-convert (Const _ c) = return $ IrConst c
-convert (Lam (_,ty) x _ body) = 
-  do n <- get
-     modify (+1)
-     let capturedVars = nub (collectFreeVars (open x body))
-     let closureArgs = [(v, IrClo) | v <- capturedVars]
-     let uniqueName = "__" ++ show n
-     closureBody <- convert (open x body)
-     tell [IrFun uniqueName (ty2ir (getCod ty)) closureArgs closureBody]
-     return (IrGlobal uniqueName)
-convert (App (_,ty) l r) = 
-  do funcIr <- convert l
-     argIr <- convert r
+convert :: TTerm -> [(Name, Ir)] -> StateT Int (Writer [IrDecl]) Ir
+convert (V _ Bound {}) _ = error "No se esperaban variables ligadas" 
+convert (V _ (Free n)) list = case lookup n list of
+                                Just a -> return a
+                                Nothing -> error n
+convert (V _ (Global n)) _ = return $ IrGlobal n
+convert (Const _ c) _ = return $ IrConst c
+convert (Lam (_,ty) x xty body) list = 
+  do funName <- getFreshName
+     cloName <- getFreshName
+     let ir = IrAccess (IrVar cloName) (ty2ir xty) 0
+     closureBody <- convert (open x body) ((x,ir):list)
+     tell [IrFun funName (ty2ir (getCod ty)) [(funName, IrFunTy), (cloName, IrClo)] closureBody]
+     return (MkClosure x [closureBody])
+convert (App (_,ty) l r) list = 
+  do funcIr <- convert l list
+     argIr <- convert r list
      return (IrCall funcIr [argIr] (ty2ir ty))
-convert (Print _ s t) = 
-  do t' <- convert t
+convert (Print _ s t) list = 
+  do t' <- convert t list
      return $ IrPrint s t' 
-convert (BinaryOp _ op l r) = 
-  do l' <- convert l
-     r' <- convert r
+convert (BinaryOp _ op l r) list = 
+  do l' <- convert l list
+     r' <- convert r list
      return $ IrBinaryOp op l' r'
-convert Fix {} = undefined 
-convert (IfZ _ c t e) = 
-  do c' <- convert c
-     t' <- convert t
-     e' <- convert e
+convert (Fix _ x _ f ty t) list = undefined
+  -- do freshName <- getFreshName
+  --    closureBody <- convert (open2 f x t) list
+  --    tell [IrFun freshName (ty2ir (getCod ty)) [] closureBody]
+  --    return (IrGlobal freshName)
+convert (IfZ _ c t e) list = 
+  do c' <- convert c list
+     t' <- convert t list
+     e' <- convert e list
      return $ IrIfZ c' t' e'
-convert (Let _ x ty def body) = 
-  do def' <- convert def
-     body' <- convert (open x body)
+convert (Let _ x ty def body) list = 
+  do def' <- convert def list 
+     body' <- convert (open x body) ((x, def'):list)
      return $ IrLet x (ty2ir ty) def' body'
 
 convertDecl :: Decl TTerm -> StateT Int (Writer [IrDecl]) Ir
-convertDecl (Decl _ x body) = do b <- convert body
+convertDecl (Decl _ x body) = do b <- convert body []
                                  case b of
                                    MkClosure {} -> return ()
-                                   _ -> tell [IrVal x IrInt b]
+                                   _ -> do freshName <- getFreshName
+                                           tell [IrVal freshName IrInt b]
                                  return b
 convertDecl DeclTy {} = error "No se soportan sinonimos de tipo" 
 
@@ -59,15 +63,10 @@ runCC decls = do let ird = snd $ runWriter (runStateT (mapM convertDecl decls) 0
                  return ird
 
 -- Funciones auxiliares
-collectFreeVars :: TTerm -> [Name]
-collectFreeVars (V _ (Free n)) = [n]
-collectFreeVars (Lam _ x _ body) = collectFreeVars (open x body)
-collectFreeVars (App _ l r) = collectFreeVars l ++ collectFreeVars r
-collectFreeVars (BinaryOp _ _ l r) = collectFreeVars l ++ collectFreeVars r
-collectFreeVars (Fix _ x _ f _ t) = collectFreeVars (open2 f x t)
-collectFreeVars (IfZ _ c t e) = collectFreeVars c ++ collectFreeVars t ++ collectFreeVars e
-collectFreeVars (Let _ x _ def body) = collectFreeVars def ++ collectFreeVars (open x body) 
-collectFreeVars _ = []
+getFreshName :: StateT Int (Writer [IrDecl]) [Char]
+getFreshName = do n <- get
+                  modify (+1)
+                  return $ show n
 
 ty2ir :: Ty -> IrTy
 ty2ir NatTy = IrInt
