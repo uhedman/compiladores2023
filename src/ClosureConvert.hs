@@ -8,21 +8,20 @@ import Subst ( open ) --, open2 )
 import MonadFD4 (MonadFD4)
 
 -- Closure convert y hoisting
-convert :: TTerm -> [(Name, Ir)] -> StateT (Name, Int) (Writer [IrDecl]) Ir
+convert :: TTerm -> [(Name, Ir)] -> StateT Int (Writer [IrDecl]) Ir
 convert (V _ Bound {}) _ = error "No se esperaban variables ligadas" 
-convert (V _ (Free n)) list = case lookup n list of
-                                Just a -> return a
-                                Nothing -> error n
+convert (V _ (Free n)) list = 
+  case lookup n list of
+    Just a -> return a
+    Nothing -> return (IrVar n)
 convert (V _ (Global n)) _ = return $ IrGlobal n
 convert (Const _ c) _ = return $ IrConst c
 convert (Lam (_,ty) x xty body) list = 
-  do funName1 <- getFunName
-     funName2 <- getFreshName
+  do funName <- getFreshName
      cloName <- getFreshName
-     let ir = IrAccess (IrVar cloName) (ty2ir xty) 0
-     closureBody <- convert (open x body) ((x,ir):list)
-     tell [IrFun funName1 (ty2ir (getCod ty)) [(funName2, IrFunTy), (cloName, IrClo)] closureBody]
-     return (MkClosure x [closureBody])
+     closureBody <- convert (open x body) list
+     tell [IrFun funName (ty2ir (getCod ty)) [(cloName, IrClo), (x, ty2ir xty)] closureBody]
+     return (MkClosure x (map snd list))
 convert (App (_,ty) l r) list = 
   do funcIr <- convert l list
      argIr <- convert r list
@@ -45,42 +44,43 @@ convert (IfZ _ c t e) list =
      e' <- convert e list
      return $ IrIfZ c' t' e'
 convert (Let _ x ty def body) list = 
-  do setFunName x
-     def' <- convert def list 
+  do def' <- convert def list 
      body' <- convert (open x body) ((x, def'):list)
      return $ IrLet x (ty2ir ty) def' body'
 
-convertDecl :: Decl TTerm -> StateT (Name, Int) (Writer [IrDecl]) Ir
-convertDecl (Decl _ x body) = do setFunName x
-                                 b <- convert body []
-                                 case b of
-                                   MkClosure {} -> return ()
-                                   _ -> do freshName <- getFreshName
-                                           tell [IrVal freshName IrInt b]
-                                 return b
+convertDecl :: Decl TTerm -> StateT Int (Writer [IrDecl]) Ir
+convertDecl (Decl _ x body) = 
+  do b <- convert body []
+     case b of
+       (MkClosure _ args) -> 
+          do cloName <- getFreshName
+             let cod = getCod (getTy body)
+             let dom = getDom (getTy body)
+             tell [IrFun x (ty2ir cod) [(cloName, IrClo), (x, ty2ir dom)] b]
+       _ -> 
+          do freshName <- getFreshName
+             tell [IrVal freshName IrInt b]
+     return b
 convertDecl DeclTy {} = error "No se soportan sinonimos de tipo" 
 
 runCC :: MonadFD4 m => [Decl TTerm] -> m [IrDecl]
-runCC decls = do let ird = snd $ runWriter (runStateT (mapM convertDecl decls) ("", 0))
+runCC decls = do let ird = snd $ runWriter (runStateT (mapM convertDecl decls) 0)
                 --  printFD4 $ show ird
                  return ird
 
 -- Funciones auxiliares
-getFreshName :: StateT (Name, Int) (Writer [IrDecl]) Name
-getFreshName = do (name, int) <- get
-                  put (name, int+1)
+getFreshName :: StateT Int (Writer [IrDecl]) Name
+getFreshName = do int <- get
+                  modify (+1)
                   return $ show int
-
-getFunName :: StateT (Name, Int) (Writer [IrDecl]) Name
-getFunName = do (name, int) <- get
-                return name
-
-setFunName :: Name -> StateT (Name, Int) (Writer [IrDecl]) ()
-setFunName newName = do modify (\(_, int) -> (newName, int))
 
 ty2ir :: Ty -> IrTy
 ty2ir NatTy = IrInt
 ty2ir FunTy {} = IrFunTy
+
+getDom :: Ty -> Ty
+getDom (FunTy dom _) = dom
+getDom _ = error "Error de tipos"
 
 getCod :: Ty -> Ty
 getCod (FunTy _ cod) = cod
