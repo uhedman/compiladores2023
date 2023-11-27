@@ -25,7 +25,7 @@ convert (Lam (_,ty) x xty body) list =
 convert (App (_,ty) l r) list = 
   do funcIr <- convert l list
      argIr <- convert r list
-     return (IrCall funcIr [funcIr, argIr] (ty2ir ty))
+     return (IrCall (IrAccess funcIr IrFunTy 0) [funcIr, argIr] (ty2ir ty))
 convert (Print _ s t) list = 
   do t' <- convert t list
      return $ IrPrint s t' 
@@ -58,8 +58,7 @@ convertDecl (Decl _ x body) =
              let dom = getDom (getTy body)
              tell [IrFun x (ty2ir cod) [(cloName, IrClo), (x, ty2ir dom)] b]
        _ -> 
-          do freshName <- getFreshName
-             tell [IrVal freshName IrInt b]
+          do tell [IrVal x IrInt b]
      return b
 convertDecl DeclTy {} = error "No se soportan sinonimos de tipo" 
 
