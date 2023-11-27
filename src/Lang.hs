@@ -34,7 +34,8 @@ data STm info ty var =
   | SFix info (var, ty) (var, ty) [(var, ty)] (STm info ty var)
   | SIfZ info (STm info ty var) (STm info ty var) (STm info ty var)
   | SLetVar info (var, ty) (STm info ty var) (STm info ty var)
-  | SLetLam info Bool [(var, ty)] (var, ty) (STm info ty var) (STm info ty var)
+  | SLetLam info [(var, ty)] (var, ty) (STm info ty var) (STm info ty var)
+  | SLetFix info [(var, ty)] (var, ty) (STm info ty var) (STm info ty var)
   deriving (Show, Functor)
 
 -- | AST de Tipos
@@ -63,8 +64,13 @@ data SDecl a =
              , sdeclType :: STy
              , sdeclBody :: a
              } 
-  | SDeclFun { sdeclPos  :: Pos
-             , sdeclRec  :: Bool
+  | SDeclLam { sdeclPos  :: Pos
+             , sdeclName :: Name
+             , sdeclArgs :: [(Name, STy)]
+             , sdeclType :: STy
+             , sdeclBody :: a
+             }
+  | SDeclFix { sdeclPos  :: Pos
              , sdeclName :: Name
              , sdeclArgs :: [(Name, STy)]
              , sdeclType :: STy

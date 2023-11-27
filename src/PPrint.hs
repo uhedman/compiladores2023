@@ -159,7 +159,7 @@ t2doc at t@(SApp _ _ _) =
 
 t2doc at (SFix _ (f,fty) (x,xty) binds m) = -- Wip
   parenIf at $
-  sep [ sep [keywordColor (pretty "fix")
+  sep [ sep [ keywordColor (pretty "fix")
             , bindings2doc ((f, fty):(x,xty):binds)
             , opColor (pretty "->") ]
       , nest 2 (t2doc False m)
@@ -176,10 +176,23 @@ t2doc at (SPrint _ str t) =
   parenIf at $
   sep [keywordColor (pretty "print"), pretty (show str), t2doc True t]
 
-t2doc at (SLetLam _ recBool binds (v,ty) t t') = -- Wip
+t2doc at (SLetLam _ binds (v,ty) t t') = -- Wip
   parenIf at $
   sep [
-    sep [keywordColor (pretty "let")
+    sep [ keywordColor (pretty "let")
+        , names2doc [v]
+        , bindings2doc binds
+        , sty2doc ty
+        , opColor (pretty "=") ]
+    , nest 2 (t2doc False t)
+    , keywordColor (pretty "in")
+    , nest 2 (t2doc False t') 
+    ]
+t2doc at (SLetFix _ binds (v,ty) t t') = -- Wip
+  parenIf at $
+  sep [
+    sep [ keywordColor (pretty "let")
+        , keywordColor (pretty "rec")
         , names2doc [v]
         , bindings2doc binds
         , sty2doc ty
@@ -192,9 +205,9 @@ t2doc at (SLetLam _ recBool binds (v,ty) t t') = -- Wip
 t2doc at (SLetVar _ (v,ty) t t') =
   parenIf at $
   sep [
-    sep [keywordColor (pretty "let")
-       , bindings2doc [(v,ty)]
-       , opColor (pretty "=") ]
+    sep [ keywordColor (pretty "let")
+        , bindings2doc [(v,ty)]
+        , opColor (pretty "=") ]
   , nest 2 (t2doc False t)
   , keywordColor (pretty "in")
   , nest 2 (t2doc False t') 

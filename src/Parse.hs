@@ -172,7 +172,7 @@ letexp :: P STerm
 letexp = do
   i <- getPos
   reserved "let"
-  try (do recBool <- (reserved "rec" >> return True) <|> return False
+  try (do funType <- (reserved "rec" >> return SLetFix) <|> return SLetLam
           v <- var
           binds <- many1 (parens binding)
           reservedOp ":"
@@ -181,7 +181,7 @@ letexp = do
           def <- expr
           reserved "in"
           body <- expr
-          return (SLetLam i recBool (spreadBinds binds) (v,ty) def body))
+          return (funType i (spreadBinds binds) (v,ty) def body))
       <|> (do ([v],ty) <- binding <|> parens binding
               reservedOp "="  
               def <- expr
@@ -206,14 +206,14 @@ decl = do
       <|> (do 
           reserved "let"
           try (do 
-            recBool <- (reserved "rec" >> return True) <|> return False
+            funType <- (reserved "rec" >> return SDeclFix) <|> return SDeclLam
             v <- var
             binds <- many1 (parens binding)
             reservedOp ":"
             ty <- typeP
             reservedOp "="  
             def <- expr
-            return (SDeclFun i recBool v (spreadBinds binds) ty def))
+            return (funType i v (spreadBinds binds) ty def))
               <|> (do 
                 ([v],ty) <- binding <|> parens binding
                 reservedOp "="  
