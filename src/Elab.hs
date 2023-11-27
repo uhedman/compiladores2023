@@ -76,7 +76,7 @@ elab' env (SLetVar p (v,vty) def body) =
 elab' env (SLetLam p recBool [] (v,vty) def body) = failPosFD4 p "Let sin argumentos"
 elab' env (SLetLam p recBool [(x,xty)] (v,vty) def body)
   | recBool = elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
-  | otherwise = elab' env $ SLetVar p (v, SFun xty vty) def body
+  | otherwise = elab' env $ SLetVar p (v, SFun xty vty) (SLam p [(x,xty)] def) body
 elab' env (SLetLam p recBool ((x,xty):binds) (v,vty) def body)
   | recBool = elab' env (SLetLam p True [(x,xty)] (v, types binds vty) (SLam p binds def) body)
   | otherwise = elab' env $ SLetVar p (v, types ((x,xty):binds) vty) def body

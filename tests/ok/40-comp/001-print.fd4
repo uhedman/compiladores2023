@@ -1,0 +1,2 @@
+let x:Nat = print "X= " 1
+let y:Nat = print "X= " x

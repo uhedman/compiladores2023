@@ -2,22 +2,24 @@ module IR where
 
 import Lang
 
-data Ir = IrVar Name
-        | IrGlobal Name
-        | IrCall Ir [Ir] IrTy
-                        -- ^ Tipo de expr final
-        | IrConst Const
-        | IrPrint String Ir
-        | IrBinaryOp BinaryOp Ir Ir 
-        | IrLet Name IrTy Ir Ir
-        | IrIfZ Ir Ir Ir
-        | MkClosure Name [Ir]
-        | IrAccess Ir IrTy Int
+data Ir = 
+    IrVar Name
+  | IrGlobal Name
+  | IrCall Ir [Ir] IrTy
+                  -- ^ Tipo de expr final
+  | IrConst Const
+  | IrPrint String Ir
+  | IrBinaryOp BinaryOp Ir Ir 
+  | IrLet Name IrTy Ir Ir
+  | IrIfZ Ir Ir Ir
+  | MkClosure Name [Ir]
+  | IrAccess Ir IrTy Int
   deriving Show
 
-data IrTy = IrInt
-          | IrClo
-          | IrFunTy
+data IrTy = 
+    IrInt
+  | IrClo
+  | IrFunTy
   deriving Show
 
 data IrDecl =
