@@ -4,16 +4,13 @@ import IR
 import Lang
 import Control.Monad.Writer
 import Control.Monad.State
-import Subst ( open ) --, open2 )
+import Subst ( open, open2 )
 import MonadFD4 (MonadFD4)
 
 -- Closure convert y hoisting
-convert :: TTerm -> [(Name, Ir)] -> StateT Int (Writer [IrDecl]) Ir
+convert :: TTerm -> [Name] -> StateT Int (Writer [IrDecl]) Ir
 convert (V _ Bound {}) _ = error "No se esperaban variables ligadas" 
-convert (V _ (Free n)) list = 
-  case lookup n list of
-    Just a -> return a
-    Nothing -> return (IrVar n)
+convert (V _ (Free n)) list = return (IrVar n)
 convert (V _ (Global n)) _ = return $ IrGlobal n
 convert (Const _ c) _ = return $ IrConst c
 convert (Lam (_,ty) x xty body) list = 
@@ -21,7 +18,7 @@ convert (Lam (_,ty) x xty body) list =
      cloName <- getFreshName
      closureBody <- convert (open x body) list
      tell [IrFun funName (ty2ir (getCod ty)) [(cloName, IrClo), (x, ty2ir xty)] closureBody]
-     return (MkClosure x (map snd list))
+     return (MkClosure funName (map IrVar list))
 convert (App (_,ty) l r) list = 
   do funcIr <- convert l list
      argIr <- convert r list
@@ -33,11 +30,12 @@ convert (BinaryOp _ op l r) list =
   do l' <- convert l list
      r' <- convert r list
      return $ IrBinaryOp op l' r'
-convert (Fix _ x _ f ty t) list = undefined
-  -- do freshName <- getFreshName
-  --    closureBody <- convert (open2 f x t) list
-  --    tell [IrFun freshName (ty2ir (getCod ty)) [] closureBody]
-  --    return (IrGlobal freshName)
+convert (Fix _ x xty f fty t) list = 
+  do funName <- getFreshName
+     cloName <- getFreshName
+     closureBody <- convert (open2 f x t) list
+     tell [IrFun funName (ty2ir (getCod fty)) [(cloName, IrClo), (x, ty2ir xty)] closureBody]
+     return (MkClosure funName (map IrVar list))
 convert (IfZ _ c t e) list = 
   do c' <- convert c list
      t' <- convert t list
@@ -45,7 +43,7 @@ convert (IfZ _ c t e) list =
      return $ IrIfZ c' t' e'
 convert (Let _ x ty def body) list = 
   do def' <- convert def list 
-     body' <- convert (open x body) ((x, def'):list)
+     body' <- convert (open x body) (x:list)
      return $ IrLet x (ty2ir ty) def' body'
 
 convertDecl :: Decl TTerm -> StateT Int (Writer [IrDecl]) Ir
