@@ -133,8 +133,8 @@ bct ms (Let _ nm _ e1 (Sc1 e2)) =
      case nm of
        "_" -> do e2' <- bct (1:ms) e2 
                  return $ e1'++[SHIFT,DROP]++e2'
-       _ -> do e2' <- bct (0:ms) e2
-               return $ e1'++[SHIFT]++e2'
+       _   -> do e2' <- bct (0:ms) e2
+                 return $ e1'++[SHIFT]++e2'
 bct ms t = do t' <- bcc ms t
               return $ t'++[RETURN]
 
@@ -175,8 +175,8 @@ bcc ms (Let _ nm _ e1 (Sc1 e2)) =
      case nm of
        "_" -> do e2' <- bcc (1:ms) e2 
                  return $ e1'++[SHIFT,DROP]++e2'
-       _ -> do e2' <- bcc (0:ms) e2
-               return $ e1'++[SHIFT]++e2'
+       _   -> do e2' <- bcc (0:ms) e2
+                 return $ e1'++[SHIFT]++e2'
 
 -- ord/chr devuelven los codepoints unicode, o en otras palabras
 -- la codificación UTF-32 del caracter.
