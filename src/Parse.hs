@@ -164,11 +164,20 @@ fix = do i <- getPos
          t <- expr
          return (SFix i (f,fty) (x,xty) (spreadBinds binds) t)
 
-letexp :: P STerm
-letexp = do
-  i <- getPos
-  reserved "let"
-  try   (do funType <- (reserved "rec" >> return SLetFix) <|> return SLetLam
+expvar :: P STerm
+expvar = do i <- getPos
+            reserved "let"
+            ([v],ty) <- binding <|> parens binding
+            reservedOp "="  
+            def <- expr
+            reserved "in"
+            body <- expr
+            return (SLetVar i (v, ty) def body)
+
+expfun :: P STerm
+expfun = do i <- getPos
+            reserved "let"
+            funType <- (reserved "rec" >> return SLetFix) <|> return SLetLam
             v <- var
             binds <- many1 (parens binding)
             reservedOp ":"
@@ -177,13 +186,10 @@ letexp = do
             def <- expr
             reserved "in"
             body <- expr
-            return (funType i (spreadBinds binds) (v,ty) def body))
-    <|> (do ([v],ty) <- binding <|> parens binding
-            reservedOp "="  
-            def <- expr
-            reserved "in"
-            body <- expr
-            return (SLetVar i (v, ty) def body))
+            return (funType i (spreadBinds binds) (v,ty) def body)
+
+letexp :: P STerm
+letexp = try expvar <|> expfun
 
 -- | Parser de términos
 tm :: P STerm
@@ -200,6 +206,7 @@ syn = do i <- getPos
 
 declvar :: P (SDecl STerm)
 declvar = do i <- getPos
+             reserved "let"
              ([v],ty) <- binding <|> parens binding
              reservedOp "="  
              def <- expr
@@ -207,6 +214,7 @@ declvar = do i <- getPos
 
 declfun :: P (SDecl STerm)
 declfun = do i <- getPos
+             reserved "let"
              funType <- (reserved "rec" >> return SDeclFix) <|> return SDeclLam
              v <- var
              binds <- many1 (parens binding)
@@ -217,8 +225,7 @@ declfun = do i <- getPos
              return (funType i v (spreadBinds binds) ty def)
 
 decl :: P (SDecl STerm)
-decl = try syn <|> (do reserved "let"
-                       try declfun <|> declvar)
+decl = syn <|> (try declfun <|> declvar)
 
 -- | Funcion auxiliar que empareja cada variable a su tipo asociado
 spreadBinds :: [([Name], STy)] -> [(Name, STy)]
