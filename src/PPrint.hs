@@ -244,6 +244,8 @@ ppDecl (Decl p x t) = do
   gdecl <- gets glb
   return (render $ sep [defColor (pretty "let")
                        , names2doc [x] 
+                       , pretty ":"
+                       , ty2doc (getTy t)
                        , defColor (pretty "=")] 
                    <+> nest 2 (t2doc False (openAll fst (map declName gdecl) t)))
 ppDecl (DeclTy p x t) = do 

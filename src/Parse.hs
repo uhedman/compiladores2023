@@ -129,10 +129,6 @@ binding = do vs <- many1 var
              ty <- typeP
              return (vs, ty)
 
-spreadBinds :: [([Name], STy)] -> [(Name, STy)]
-spreadBinds = concatMap f
-  where f (vs, t) = map (\v -> (v, t)) vs
-
 lam :: P STerm
 lam = do i <- getPos
          reserved "fun"
@@ -172,53 +168,62 @@ letexp :: P STerm
 letexp = do
   i <- getPos
   reserved "let"
-  try (do funType <- (reserved "rec" >> return SLetFix) <|> return SLetLam
-          v <- var
-          binds <- many1 (parens binding)
-          reservedOp ":"
-          ty <- typeP
-          reservedOp "="  
-          def <- expr
-          reserved "in"
-          body <- expr
-          return (funType i (spreadBinds binds) (v,ty) def body))
-      <|> (do ([v],ty) <- binding <|> parens binding
-              reservedOp "="  
-              def <- expr
-              reserved "in"
-              body <- expr
-              return (SLetVar i (v, ty) def body))
-
--- | Parser de términos
-tm :: P STerm
-tm = app <|> lam <|> ifz <|> printOp <|> fix <|> letexp
-
--- | Parser de declaraciones
-decl :: P (SDecl STerm)
-decl = do 
-  i <- getPos
-  try (do 
-    reserved "type"
-    v <- var
-    reservedOp "="
-    ty <- typeP
-    return (SDeclTy i v ty))
-      <|> (do 
-          reserved "let"
-          try (do 
-            funType <- (reserved "rec" >> return SDeclFix) <|> return SDeclLam
+  try   (do funType <- (reserved "rec" >> return SLetFix) <|> return SLetLam
             v <- var
             binds <- many1 (parens binding)
             reservedOp ":"
             ty <- typeP
             reservedOp "="  
             def <- expr
-            return (funType i v (spreadBinds binds) ty def))
-              <|> (do 
-                ([v],ty) <- binding <|> parens binding
-                reservedOp "="  
-                def <- expr
-                return (SDeclVar i v ty def)))
+            reserved "in"
+            body <- expr
+            return (funType i (spreadBinds binds) (v,ty) def body))
+    <|> (do ([v],ty) <- binding <|> parens binding
+            reservedOp "="  
+            def <- expr
+            reserved "in"
+            body <- expr
+            return (SLetVar i (v, ty) def body))
+
+-- | Parser de términos
+tm :: P STerm
+tm = app <|> lam <|> ifz <|> printOp <|> fix <|> letexp
+
+-- | Parser de declaraciones
+syn :: P (SDecl STerm)
+syn = do i <- getPos
+         reserved "type"
+         v <- var
+         reservedOp "="
+         ty <- typeP
+         return (SDeclTy i v ty)
+
+declvar :: P (SDecl STerm)
+declvar = do i <- getPos
+             ([v],ty) <- binding <|> parens binding
+             reservedOp "="  
+             def <- expr
+             return (SDeclVar i v ty def)
+
+declfun :: P (SDecl STerm)
+declfun = do i <- getPos
+             funType <- (reserved "rec" >> return SDeclFix) <|> return SDeclLam
+             v <- var
+             binds <- many1 (parens binding)
+             reservedOp ":"
+             ty <- typeP
+             reservedOp "="  
+             def <- expr
+             return (funType i v (spreadBinds binds) ty def)
+
+decl :: P (SDecl STerm)
+decl = try syn <|> (do reserved "let"
+                       try declfun <|> declvar)
+
+-- | Funcion auxiliar que empareja cada variable a su tipo asociado
+spreadBinds :: [([Name], STy)] -> [(Name, STy)]
+spreadBinds = concatMap f
+  where f (vs, t) = map (\v -> (v, t)) vs
 
 -- | Parser de programas (listas de declaraciones) 
 program :: P [SDecl STerm]
