@@ -84,10 +84,6 @@ elab' env (SLetLam p ((x,xty):binds) (v,vty) def body) =
 elab' env (SLetFix p ((x,xty):binds) (v,vty) def body) = 
   elab' env (SLetFix p [(x,xty)] (v, types binds vty) (SLam p binds def) body)
 
-types :: [(Name, STy)] -> STy -> STy
-types binds v = foldr f v binds
-  where f (_, vty) = SFun vty
-
 elabDecl :: MonadFD4 m => SDecl STerm -> m (Decl Term)
 elabDecl (SDeclTy p n ty) = 
   do ty' <- sty2ty ty
@@ -103,6 +99,12 @@ elabDecl (SDeclFix p n [(x, xty)] ty body) =
   elabDecl $ SDeclVar p n (SFun xty ty) (SFix p (n, SFun xty ty) (x, xty) [] body)
 elabDecl (SDeclFix p n args ty body) = 
   elabDecl $ SDeclFix p n [head args] (types (tail args) ty) (SLam p (tail args) body)
+
+-- Funciones auxiliares
+
+types :: [(Name, STy)] -> STy -> STy
+types binds v = foldr f v binds
+  where f (_, vty) = SFun vty
 
 sty2ty :: MonadFD4 m => STy -> m Ty
 sty2ty SNatTy = return NatTy
