@@ -1,0 +1,13 @@
+### Probamos ejemplo para Closure Conversion.
+
+let x : Nat = print "Def x = " 1
+
+let y : Nat = print "Def y = " (2 + x)
+
+let f (y:Nat) : Nat = 1 + y
+
+let suma (x y z w: Nat) : Nat = x + y
+
+let suma5 : Nat -> Nat = suma 5 2 3
+
+let res : Nat = print "Resultado es " (suma5 2)

@@ -1,0 +1,5 @@
+# program that never terminates
+
+let (f: Nat -> Nat)= fix (inf: Nat -> Nat) (x:Nat) -> inf x
+
+let ret = f 0
