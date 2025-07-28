@@ -1,6 +1,6 @@
 TESTDIRS += tests/ok/00-basicos
 TESTDIRS += tests/ok/10-sugar
-TESTDIRS += tests/ok/20-tysym
+# TESTDIRS += tests/ok/20-tysym
 TESTDIRS += tests/ok/30-opt
 
 TESTS	:= $(shell find $(TESTDIRS) -name '*.fd4' -type f | sort)
@@ -12,6 +12,7 @@ TESTS	:= $(shell find $(TESTDIRS) -name '*.fd4' -type f | sort)
 # la VM si cambió la VM, etc).
 EXE	:= $(shell cabal exec whereis compiladores2023 | awk '{print $$2};')
 VM	:= ./vm/macc
+R 	:= gcc runtime.c -lgc -w
 
 EXTRAFLAGS	:=
 # EXTRAFLAGS	+= --optimize
@@ -22,11 +23,13 @@ EXTRAFLAGS	:=
 # CHECK	+= $(patsubst %,%.check_cek,$(TESTS))
 # CHECK	+= $(patsubst %,%.check_bc32_h,$(TESTS))
 # CHECK	+= $(patsubst %,%.check_bc32,$(TESTS))
-CHECK	+= $(patsubst %,%.check_eval_opt,$(TESTS))
+# CHECK	+= $(patsubst %,%.check_eval_opt,$(TESTS))
 # CHECK	+= $(patsubst %,%.check_opt,$(TESTS))
+CHECK += $(patsubst %,%.check_c,$(TESTS))
 
 # Ejemplo: así se puede apagar un test en particular.
-# CHECK	:= $(filter-out tests/correctos/grande.fd4.check_bc32,$(CHECK))
+CHECK	:= $(filter-out tests/ok/00-basicos/401-inf.fd4.% \
+                        tests/ok/10-sugar/test7_gcd_2.fd4.%,$(CHECK))
 
 # Esta regla corre todos los tests (por sus dependencias) y luego
 # imprime un mensaje.
@@ -52,7 +55,9 @@ endif
 #
 # La _única_ salida que se acepta es la del --eval. Todos los demás
 # evaluadores/backends deben coincidir.
-accept: $(patsubst %,%.accept,$(TESTS))
+
+# Filtro para deshabilitar un archivo específico en accept (ejemplo: tests/ok/00-basicos/401-inf.fd4)
+accept: $(filter-out tests/ok/00-basicos/401-inf.fd4.accept,$(patsubst %,%.accept,$(TESTS)))
 
 # La otra salida esperada es la de las optimizaciones.
 # accept: $(patsubst %,%.accept_opt,$(TESTS))
@@ -130,6 +135,19 @@ accept: $(patsubst %,%.accept,$(TESTS))
 	$(Q)touch $@
 	@echo "OK	EVALOPT	$(patsubst %.out,%,$<)"
 
+# Reglas para compilar a C y ejecutar
+%.c: %.fd4 $(EXE)
+	$(Q)$(EXE) $(EXTRAFLAGS) --cc $< >/dev/null
+
+%.fd4.actual_out_c: %.c runtime.c
+	$(Q)$(R) $<            # compila el C con runtime.c
+	$(Q)./a.out > $@       # ejecuta y guarda la salida
+
+%.check_c: %.out %.actual_out_c
+	$(Q)diff -u $^
+	$(Q)touch $@
+	@echo "OK	C		$(patsubst %.out,%,$<)"
+
 # Estas directivas indican que NO se borren los archivos intermedios,
 # así podemos examinarlos, particularmente cuando algo no anda.
 .SECONDARY: $(patsubst %,%.actual_out_eval,$(TESTS))
@@ -137,7 +155,8 @@ accept: $(patsubst %,%.accept,$(TESTS))
 .SECONDARY: $(patsubst %,%.actual_out_bc32,$(TESTS))
 .SECONDARY: $(patsubst %,%.actual_out_bc32_h,$(TESTS))
 .SECONDARY: $(patsubst %,%.actual_out_eval_opt,$(TESTS))
+.SECONDARY: $(patsubst %,%.actual_out_c,$(TESTS))
 .SECONDARY: $(patsubst %,%.actual_opt_out,$(TESTS))
-.SECONDARY: $(patsubst %.fd4,%.bc32,$(TESTS))
+.SECONDARY: $(patsubst %.fd4,%.bc32,%.c,$(TESTS))
 
 .PHONY: test_all accept

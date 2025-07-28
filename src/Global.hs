@@ -9,7 +9,7 @@ Stability   : experimental
 -}
 module Global where
 
-import Lang
+import Lang ( getTy, Decl(DeclTy, Decl), Name, TTerm, Ty )
 
 data GlEnv = GlEnv {
   inter :: Bool,        --  ^ True, si estamos en modo interactivo.
@@ -19,7 +19,8 @@ data GlEnv = GlEnv {
   cantDecl :: Int,      -- ^ Cantidad de declaraciones desde la última carga
   glb :: [Decl TTerm],  -- ^ Entorno con declaraciones globales
   env :: [(Name, Ty)],  -- ^ Entorno con declaraciones de tipos globales
-  stats :: Statistics   -- ^ Estadisticas del programa
+  stats :: Statistics,  -- ^ Estadisticas del programa
+  debugMsg :: String    -- ^ Mensajes de debug
 }
 
 data Statistics = Statistics {
@@ -52,12 +53,13 @@ data Mode =
   -- | Assembler
   -- | Build
 data Conf = Conf {
-    opt  :: Bool,          --  ^ True, si estan habilitadas las optimizaciones.
-    cek  :: Bool,          --  ^ True, si se utiliza la CEK.
-    prof :: Bool,          --  ^ True, si se quieren conseguir las metricas.
-    modo :: Mode
+    opt   :: Bool,          --  ^ True, si estan habilitadas las optimizaciones.
+    cek   :: Bool,          --  ^ True, si se utiliza la CEK.
+    prof  :: Bool,          --  ^ True, si se quieren conseguir las metricas.
+    debug :: Bool,          --  ^ True, si se quiere debuggear el programa.
+    modo  :: Mode
 }
 
 -- | Valor del estado inicial
 initialEnv :: GlEnv
-initialEnv = GlEnv False "" 0 [] [] initStats
+initialEnv = GlEnv False "" 0 [] [] initStats ""

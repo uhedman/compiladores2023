@@ -13,6 +13,11 @@ module Eval where
 
 import Common ( abort )
 import Lang
+    ( BinaryOp(..),
+      Const(CNat),
+      TTerm,
+      Tm(Let, V, App, Lam, Fix, Print, BinaryOp, IfZ, Const),
+      Var(Global) )
 import Subst ( subst2, subst )
 import MonadFD4 ( MonadFD4, lookupDecl, failFD4, printFD4 )
 import PPrint ( ppName, pp )

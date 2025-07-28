@@ -13,7 +13,18 @@ fully named (@STerm) a locally closed (@Term@)
 module Elab (elab, elabDecl) where
 
 import Lang
-import Subst
+    ( Decl(Decl, DeclTy),
+      Name,
+      SDecl(SDeclFix, SDeclTy, SDeclLam, SDeclVar),
+      STerm,
+      STm(SLam, SV, SConst, SIfZ, SBinaryOp, SPrint, SApp, SLetLam,
+          SLetVar, SLetFix, SFix),
+      STy(..),
+      Term,
+      Tm(Let, V, Const, Lam, Fix, IfZ, BinaryOp, Print, App),
+      Ty(..),
+      Var(Global, Free) )
+import Subst ( close, close2 )
 import MonadFD4 (MonadFD4, lookupTy, failFD4, failPosFD4)
 
 -- | 'elab' transforma variables ligadas en índices de de Bruijn
@@ -75,14 +86,16 @@ elab' env (SLetVar p (v,vty) def body) =
      return $ Let p v vty' def' (close v body')
 elab' env (SLetLam p [] (v,vty) def body) = failPosFD4 p "Let sin argumentos"
 elab' env (SLetFix p [] (v,vty) def body) = failPosFD4 p "Let sin argumentos"
+
 elab' env (SLetLam p [(x,xty)] (v,vty) def body) = 
   elab' env $ SLetVar p (v, SFun xty vty) (SLam p [(x,xty)] def) body
 elab' env (SLetFix p [(x,xty)] (v,vty) def body) =
-  elab' env (SLetVar p (v, vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body)
+  elab' env $ SLetVar p (v, SFun xty vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body
+
 elab' env (SLetLam p ((x,xty):binds) (v,vty) def body) =
   elab' env $ SLetVar p (v, types ((x,xty):binds) vty) def body
 elab' env (SLetFix p ((x,xty):binds) (v,vty) def body) = 
-  elab' env (SLetFix p [(x,xty)] (v, types binds vty) (SLam p binds def) body)
+  elab' env (SLetFix p [(x,xty)] (v, types ((x,xty):binds) vty) (SLam p binds def) body)
 
 elabDecl :: MonadFD4 m => SDecl STerm -> m (Decl Term)
 elabDecl (SDeclTy p n ty) = 

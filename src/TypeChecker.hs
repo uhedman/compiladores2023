@@ -13,10 +13,21 @@ module TypeChecker (
    ) where
 
 import Lang
-import Global
-import MonadFD4
-import PPrint
-import Subst
+    ( getPos,
+      getTy,
+      Const(CNat),
+      Decl(DeclTy, Decl),
+      Name,
+      TTerm,
+      Term,
+      Tm(BinaryOp, Const, Print, IfZ, Lam, App, V, Fix, Let),
+      Ty(..),
+      Var(Free, Bound, Global) )
+import Global ( tyEnv )
+import MonadFD4 ( failPosFD4, lookupTy, MonadFD4, MonadState(get) )
+import PPrint ( pp, ppName, ppTy )
+import Subst ( close, close2, open, open2 )
+import Control.Monad (when)
 
 
 -- | 'tc' chequea y devuelve el tipo de un término 

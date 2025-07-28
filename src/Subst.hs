@@ -15,8 +15,8 @@ y la substitución.
 
 module Subst where
 
-import Lang
-import Common
+import Lang ( Name, Scope(..), Scope2(..), Tm(..), Var(..) )
+import Common ( abort )
 
 -- Esta es una función auxiliar que usan el resto de las funciones de este módulo
 -- para modificar las vsriables (ligadas y libres) de un término
@@ -24,9 +24,9 @@ varChanger :: (Int -> info -> Name -> Tm info Var) --que hacemos con las variabl
            -> (Int -> info -> Int ->  Tm info Var) --que hacemos con los indices de De Bruijn
            -> Tm info Var -> Tm info Var
 varChanger local bound t = go 0 t where
-  go n   (V p (Bound i)) = bound n p i
-  go n   (V p (Free x)) = local n p x 
-  go n   (V p (Global x)) = V p (Global x) 
+  go n (V p (Bound i)) = bound n p i
+  go n (V p (Free x)) = local n p x 
+  go n (V p (Global x)) = V p (Global x) 
   go n (Lam p y ty (Sc1 t))   = Lam p y ty (Sc1 (go (n+1) t))
   go n (App p l r)   = App p (go n l) (go n r)
   go n (Fix p f fty x xty (Sc2 t)) = Fix p f fty x xty (Sc2 (go (n+2) t))

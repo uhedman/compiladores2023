@@ -3,7 +3,15 @@ module Optimize
  where
 
 import Lang
-import MonadFD4
+    ( BinaryOp(Sub, Add),
+      Const(CNat),
+      Decl(DeclTy, Decl),
+      Scope(Sc1),
+      Scope2(Sc2),
+      TTerm,
+      Tm(Let, V, Lam, App, Fix, IfZ, Const, Print, BinaryOp),
+      Var(Bound, Global) )
+import MonadFD4 ( failFD4, lookupDecl, MonadFD4 )
 import Subst ( subst, open, close, open2, close2 )
 import Control.Monad.Extra ( (||^) )
 

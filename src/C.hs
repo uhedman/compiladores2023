@@ -1,8 +1,25 @@
 module C ( ir2C ) where
 import Prettyprinter
+    ( (<+>),
+      defaultLayoutOptions,
+      hsep,
+      layoutSmart,
+      line,
+      nest,
+      sep,
+      tupled,
+      vsep,
+      braces,
+      brackets,
+      colon,
+      parens,
+      semi,
+      Doc,
+      Pretty(pretty) )
 import Prettyprinter.Render.Terminal ( renderStrict )
 import IR
-import Lang
+    ( Ir(..), IrDecl(IrFun, IrVal), IrDecls(IrDecls), IrTy(..) )
+import Lang ( BinaryOp(..), Const(CNat) )
 import Data.Text (unpack)
 import Data.Char ( isAlpha, ord )
 

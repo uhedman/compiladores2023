@@ -1,6 +1,6 @@
 module IR where
 
-import Lang
+import Lang ( BinaryOp, Const, Name )
 
 data Ir = 
     IrVar Name

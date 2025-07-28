@@ -13,12 +13,37 @@ Stability   : experimental
 module Parse (tm, Parse.parse, decl, runP, P, program, declOrTm) where
 
 import Prelude hiding ( const )
-import Lang hiding (getPos)
-import Common
-import Text.Parsec hiding (runP,parse)
+import Lang
+    ( BinaryOp(..),
+      Const(..),
+      Name,
+      SDecl(SDeclLam, SDeclTy, SDeclVar, SDeclFix),
+      STerm,
+      STm(SLetLam, SPrint, SBinaryOp, SConst, SV, SLam, SApp, SIfZ, SFix,
+          SLetVar, SLetFix),
+      STy(..) )
+import Common ( Pos(..) )
+import Text.Parsec
+    ( ParseError,
+      Parsec,
+      upper,
+      eof,
+      many1,
+      option,
+      sourceColumn,
+      sourceLine,
+      (<|>),
+      getPosition,
+      many,
+      runParser,
+      try )
 --import Data.Char ( isNumber, ord )
 import qualified Text.Parsec.Token as Tok
-import Text.ParserCombinators.Parsec.Language --( GenLanguageDef(..), emptyDef )
+import Text.ParserCombinators.Parsec.Language
+    ( emptyDef,
+      GenLanguageDef(identLetter, commentLine, reservedNames,
+                     reservedOpNames),
+      LanguageDef ) --( GenLanguageDef(..), emptyDef )
 import qualified Text.Parsec.Expr as Ex
 import Text.Parsec.Expr (Operator, Assoc)
 import Control.Monad.Identity (Identity)
@@ -43,7 +68,7 @@ langDef = emptyDef {
 whiteSpace :: P ()
 whiteSpace = Tok.whiteSpace lexer
 
-natural :: P Integer 
+natural :: P Integer
 natural = Tok.natural lexer
 
 stringLiteral :: P String
@@ -83,18 +108,18 @@ getPos = do pos <- getPosition
 
 tyatom :: P STy
 tyatom = (reserved "Nat" >> return SNatTy)
-         <|> do v <-var 
+         <|> do v <-var
                 return (Syn v)
          <|> parens typeP
 
 typeP :: P STy
-typeP = try (do 
+typeP = try (do
           x <- tyatom
           reservedOp "->"
           y <- typeP
           return (SFun x y))
       <|> tyatom
-          
+
 const :: P Const
 const = CNat <$> num
 
@@ -103,8 +128,8 @@ printOp = do
   i <- getPos
   reserved "print"
   str <- option "" stringLiteral
-  a <- atom
-  return (SPrint i str a)
+  (atom >>= \x -> return (SPrint i str x))
+       <|> return (SLam i [("x", SNatTy)] (SPrint i str (SV i "x")))
 
 binary :: String -> BinaryOp -> Assoc -> Operator String () Identity STerm
 binary s f = Ex.Infix (reservedOp s >> return (SBinaryOp NoPos f))
@@ -168,7 +193,7 @@ expvar :: P STerm
 expvar = do i <- getPos
             reserved "let"
             ([v],ty) <- binding <|> parens binding
-            reservedOp "="  
+            reservedOp "="
             def <- expr
             reserved "in"
             body <- expr
@@ -182,7 +207,7 @@ expfun = do i <- getPos
             binds <- many1 (parens binding)
             reservedOp ":"
             ty <- typeP
-            reservedOp "="  
+            reservedOp "="
             def <- expr
             reserved "in"
             body <- expr
@@ -208,7 +233,7 @@ declvar :: P (SDecl STerm)
 declvar = do i <- getPos
              reserved "let"
              ([v],ty) <- binding <|> parens binding
-             reservedOp "="  
+             reservedOp "="
              def <- expr
              return (SDeclVar i v ty def)
 
@@ -220,7 +245,7 @@ declfun = do i <- getPos
              binds <- many1 (parens binding)
              reservedOp ":"
              ty <- typeP
-             reservedOp "="  
+             reservedOp "="
              def <- expr
              return (funType i v (spreadBinds binds) ty def)
 

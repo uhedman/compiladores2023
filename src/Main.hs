@@ -15,7 +15,7 @@ module Main where
 import System.Console.Haskeline ( defaultSettings, getInputLine, runInputT, InputT )
 import Control.Monad.Catch (MonadMask)
 
---import Control.Monad
+import Control.Monad
 import Control.Monad.Trans
 import Data.List (nub, isPrefixOf, intercalate )
 import Data.Char ( isSpace )
@@ -27,19 +27,53 @@ import System.Exit ( exitWith, ExitCode(ExitFailure) )
 import Options.Applicative
 
 import Global
-import Errors
+    ( tyEnv,
+      Conf(Conf),
+      GlEnv(GlEnv, inter, stats, env, glb, cantDecl, lfile),
+      Mode(..) )
+import Errors ( Error(ParseErr) )
 import Lang
+    ( getTy,
+      Decl(Decl, DeclTy, declName),
+      SDecl,
+      STerm,
+      STm(SV),
+      TTerm )
 import Parse ( P, tm, program, declOrTm, runP )
 import Elab ( elab, elabDecl )
 import Eval ( eval )
 import PPrint ( pp , ppTy, ppDecl, ppStats )
 import MonadFD4
+    ( MonadError(throwError),
+      MonadState(get),
+      addDecl,
+      addTy,
+      catchErrors,
+      eraseLastFileDecls,
+      getCek,
+      getInter,
+      getLastFile,
+      getMode,
+      getOpt,
+      getProf,
+      getStats,
+      lookupDecl,
+      printFD4,
+      resetStats,
+      runFD4,
+      -- runFD4Prof,
+      setInter,
+      setLastFile,
+      gets,
+      FD4,
+      -- FD4Prof,
+      -- FD4Debug,
+      MonadFD4 )
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
 import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
 import Optimize ( optimizeDecl )
 import System.FilePath ( dropExtension )
-import qualified Control.Monad
 import C (ir2C)
 import IR (IrDecls (IrDecls))
 import ClosureConvert (runCC)
@@ -48,8 +82,8 @@ prompt :: String
 prompt = "FD4> "
 
 -- | Parser de banderas
-parseMode :: Parser (Mode,Bool,Bool,Bool)
-parseMode = (,,,) <$>
+parseMode :: Parser (Mode,Bool,Bool,Bool,Bool)
+parseMode = (,,,,) <$>
       (flag' Typecheck ( long "typecheck" <> short 't' <> help "Chequear tipos e imprimir el término")
       <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
       <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
@@ -63,10 +97,11 @@ parseMode = (,,,) <$>
    <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
    <*> flag False True (long "cek" <> short 'k' <> help "Utilizar la CEK")
    <*> flag False True (long "profiling" <> short 'p' <> help "Mostrar metricas del programa")
+   <*> flag False True (long "debug" <> short 'd' <> help "Mostrar mensajes de depuración")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
-parseArgs :: Parser (Mode,Bool,Bool,Bool, [FilePath])
-parseArgs = (\(m,o,c,p) f -> (m,o,c,p,f)) <$> parseMode <*> many (argument str (metavar "FILES..."))
+parseArgs :: Parser (Mode,Bool,Bool,Bool,Bool, [FilePath])
+parseArgs = (\(m,o,c,p,d) f -> (m,o,c,p,d,f)) <$> parseMode <*> many (argument str (metavar "FILES..."))
 
 main :: IO ()
 main = execParser opts >>= go
@@ -76,28 +111,21 @@ main = execParser opts >>= go
      <> progDesc "Compilador de FD4"
      <> header "Compilador de FD4 de la materia Compiladores 2022" )
 
-    go :: (Mode,Bool,Bool,Bool,[FilePath]) -> IO ()
-    go (Interactive,opt,cek,prof,files) =
-      if prof then runOrFail (Conf opt cek prof Interactive) $ Right (runInputT defaultSettings (repl files))
-              else runOrFail (Conf opt cek prof Interactive) $ Left (runInputT defaultSettings (repl files))
-    go (Bytecompile,opt,cek,prof,files) =
-      if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ bytecompileFile files
-              else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ bytecompileFile files
-    go (CC,opt,cek,prof,files) =
-      if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ ccompileFile files
-              else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ ccompileFile files
-    go (RunVM,opt,cek,prof,files) =
-      if prof then runOrFail (Conf opt cek prof RunVM) $ Right $ mapM_ runVMFile files
-              else runOrFail (Conf opt cek prof RunVM) $ Left $ mapM_ runVMFile files
-    go (m,opt,cek,prof,files) =
-      if prof then runOrFail (Conf opt cek prof m) $ Right $ mapM_ compileFile files
-              else runOrFail (Conf opt cek prof m) $ Left $ mapM_ compileFile files   
+    go :: (Mode,Bool,Bool,Bool,Bool,[FilePath]) -> IO ()
+    go (Interactive,opt,cek,prof,debug,files) =
+      runOrFail (Conf opt cek prof debug Interactive) $ runInputT defaultSettings (repl files)
+    go (Bytecompile,opt,cek,prof,debug,files) =
+      runOrFail (Conf opt cek prof debug RunVM) $ mapM_ bytecompileFile files
+    go (CC,opt,cek,prof,debug,files) =
+      runOrFail (Conf opt cek prof debug RunVM) $ mapM_ ccompileFile files
+    go (RunVM,opt,cek,prof,debug,files) =
+      runOrFail (Conf opt cek prof debug RunVM) $ mapM_ runVMFile files
+    go (m,opt,cek,prof,debug,files) =
+      runOrFail (Conf opt cek prof debug m) $ mapM_ compileFile files
 
-runOrFail :: Conf -> Either (FD4 a) (FD4Prof a) -> IO a
+runOrFail :: Conf -> FD4 a -> IO a
 runOrFail c m = do
-  r <- case m of 
-         Left noProf -> runFD4 noProf c
-         Right prof -> runFD4Prof prof c
+  r <- runFD4 m c
   case r of
     Left err -> do
       liftIO $ hPrint stderr err
@@ -125,7 +153,7 @@ repl args = do
 
 loadFile ::  MonadFD4 m => FilePath -> m [SDecl STerm]
 loadFile f = do
-    let filename = reverse(dropWhile isSpace (reverse f))
+    let filename = reverse (dropWhile isSpace (reverse f))
     x <- liftIO $ catch (readFile filename)
                (\e -> do let err = show (e :: IOException)
                          hPutStrLn stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err)
@@ -137,8 +165,8 @@ runVMFile ::  MonadFD4 m => FilePath -> m ()
 runVMFile f = do bc <- liftIO $ bcRead f
                  runBC bc
                  p <- getProf
-                 Control.Monad.when p $ do stats <- getStats
-                                           printFD4 (ppStats stats)
+                 when p $ do stats <- getStats
+                             printFD4 (ppStats stats)
 
 bytecompileFile :: MonadFD4 m => FilePath -> m ()
 bytecompileFile f = do
@@ -185,21 +213,23 @@ parseIO filename p x = case runP p x filename of
                   Right r -> return r
 
 evalDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
-evalDecl (Decl p x e) = 
+evalDecl (Decl p x e) =
   do e' <- eval e
      return $ Decl p x e'
 evalDecl d = return d
 
 evalDeclCek :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
-evalDeclCek (Decl p x e) = 
+evalDeclCek (Decl p x e) =
   do e' <- evalCEK e
      return $ Decl p x e'
 evalDeclCek d = return d
 
 typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
-typecheckDecl decl = 
-  do decl' <- elabDecl decl
-     tcDecl decl' 
+typecheckDecl decl =
+  do
+    --  printFD4 $ "SDecl (superficial): " ++ show decl
+     decl' <- elabDecl decl
+     tcDecl decl'
 
 handleDecl ::  MonadFD4 m => SDecl STerm -> m ()
 handleDecl d = do

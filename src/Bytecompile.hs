@@ -1,5 +1,4 @@
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-|
 Module      : Bytecompile
@@ -17,7 +16,24 @@ module Bytecompile
  where
 
 import Lang
+    ( getTy,
+      BinaryOp(Sub, Add),
+      Const(CNat),
+      Decl(DeclTy, Decl),
+      Module,
+      Scope(Sc1),
+      Scope2(Sc2),
+      TTerm,
+      Tm(Let, V, Const, Lam, App, Print, BinaryOp, Fix, IfZ),
+      Var(Free, Bound, Global) )
 import MonadFD4
+    ( failFD4,
+      printFD4,
+      printStrFD4,
+      MonadFD4,
+      addOp,
+      setMem,
+      addClos)
 import Subst ( close )
 
 import qualified Data.ByteString.Lazy as BS
@@ -26,7 +42,7 @@ import Data.Binary.Put ( putWord32le )
 import Data.Binary.Get ( getWord32le, isEmpty )
 
 import Data.List (intercalate)
-import Data.Char
+import Data.Char ( ord, chr )
 
 type Opcode = Int
 type Bytecode = [Int]

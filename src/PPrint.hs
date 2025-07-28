@@ -19,6 +19,19 @@ module PPrint (
     ) where
 
 import Lang
+    ( getTy,
+      BinaryOp(..),
+      Const(..),
+      Decl(DeclTy, Decl, declName),
+      Name,
+      STerm,
+      STm(SBinaryOp, SV, SConst, SLam, SApp, SFix, SIfZ, SPrint, SLetLam,
+          SLetFix, SLetVar),
+      STy(..),
+      TTerm,
+      Tm(..),
+      Ty(..),
+      Var(..) )
 import Subst ( open, open2 )
 import Common ( Pos )
 

@@ -17,7 +17,17 @@ module Bytecompile8
  where
 
 import Lang
-import MonadFD4
+    ( getTy,
+      BinaryOp(Sub, Add),
+      Const(CNat),
+      Decl(DeclTy, Decl),
+      Module,
+      Scope(Sc1),
+      Scope2(Sc2),
+      TTerm,
+      Tm(Let, V, Const, Lam, App, Print, BinaryOp, Fix, IfZ),
+      Var(Free, Bound, Global) )
+import MonadFD4 ( failFD4, printFD4, printStrFD4, MonadFD4 )
 import Subst ( close )
 
 import qualified Data.ByteString.Lazy as BS
