@@ -64,60 +64,12 @@ constProp :: MonadFD4 m => TTerm -> m (Bool, TTerm)
 constProp (Let _ _ _ c@(Const _ _) t) = return (True, subst c t)
 constProp t = return (False, t)
 
--- | Inline expansion
-inlineExp :: MonadFD4 m => TTerm -> m (Bool, TTerm)
-inlineExp l@(Let (p, ty) z zty lam@(Lam _ _ _ (Sc1 def)) (Sc1 body)) = 
-  do b <- hasPrint def
-     if not b && countVar 0 body == 1
-     then let (b', body') = search 0 body
-          in if b' 
-             then return (True, Let (p, ty) z zty lam (close z body'))
-             else return (False, l)
-     else return (False, l)
-  where 
-    search :: Int -> TTerm -> (Bool, TTerm)
-    search n v@V {} = (False, v)
-    search n c@Const {} = (False, c)
-    search n (Lam i v vty (Sc1 t)) =
-      let (b', t') = search (n+1) t
-      in  (b', Lam i v vty (Sc1 t'))
-    search n (App i v@(V _ (Bound m)) t) =
-      if m == n 
-      then expand t
-      else let (b', t') = search n t
-           in  (b', App i v t')
-    search n (App i s t) =
-      let (bs, s') = search n s
-          (bt, t') = search n t
-      in  (bs || bt, App i s' t')
-    search n (Print i s t) =
-      let (b', t') = search n t
-      in  (b', Print i s t')
-    search n (BinaryOp i op s t) =
-      let (bs, s') = search n s
-          (bt, t') = search n t
-      in  (bs || bt, BinaryOp i op s' t')
-    search n (Fix i f fty x xty (Sc2 t)) =
-      let (b', t') = search (n+2) t
-      in  (b', Fix i f fty x xty (Sc2 t'))
-    search n (IfZ i c t e) =
-      let (bc, c') = search n c
-          (bt, t') = search n t
-          (be, e') = search n e
-      in  (bc || bt || be, IfZ i c' t' e')
-    search n (Let i x xty d (Sc1 b)) = 
-      let (bd, d') = search n d
-          (bb, b') = search (n+1) b
-      in  (bd || bb, Let i x xty d' (Sc1 b'))
-    expand :: TTerm -> (Bool, TTerm)
-    expand v@(V _ (Bound _)) = (False, v)
-    expand v@(V {}) = (True, subst v (Sc1 def))
-    expand c@Const {} = (True, subst c (Sc1 def))
-    expand t = (True, Let (NoPos, ty) z ty t (Sc1 def))
-inlineExp l@(Let _ _ _ Fix {} _) = return (False, l)
-inlineExp t = return (False, t)
-
 optimizeTerm :: MonadFD4 m => TTerm -> m (Bool, TTerm)
+optimizeTerm v@(V _ (Global l)) = 
+  do d <- lookupDecl l
+     case d of
+       Just l' -> return (True, l')
+       Nothing -> return (False, v)
 optimizeTerm v@V {} = return (False, v)
 optimizeTerm c@Const {} = return (False, c)
 optimizeTerm (Lam i x ty t) = 
@@ -125,6 +77,16 @@ optimizeTerm (Lam i x ty t) =
      if b 
      then return (True, Lam i x ty (close x t'))
      else return (False, Lam i x ty t)
+optimizeTerm t@(App i (V i' (Global l)) r) = 
+  do d <- lookupDecl l
+     case d of
+       Just l' -> return (True, App i l' r)
+       Nothing -> return (False, t)
+optimizeTerm (App _ (Lam _ x ty t) r) = 
+  case r of 
+    V {} -> return (True, subst r t)
+    Const {} -> return (True, subst r t)
+    _ -> return (True, Let (NoPos, ty) x ty r t)
 optimizeTerm (App i l r) = 
   do (bl, l') <- optimizeTerm l
      (br, r') <- optimizeTerm r
@@ -156,11 +118,7 @@ optimizeTerm l@(Let i x ty def t) = do
           (bf2, bodyFold) <- consFold (open x t)
           if bf2
             then return (True, Let i x ty def (close x bodyFold))
-            else do 
-              (bp, lp) <- constProp l
-              if bp
-                then return (True, lp)
-                else inlineExp l
+            else constProp l
 
 -- Funciones auxiliares
 

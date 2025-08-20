@@ -68,7 +68,7 @@ import MonadFD4
       MonadFD4 )
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
-import Bytecompile8 ( runBC, bytecompileModule, bcWrite, bcRead )
+import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
 import Optimize ( optimizeDecl )
 import System.FilePath ( dropExtension )
 import C (ir2C)
@@ -251,8 +251,6 @@ handleDecl d = do
                 (DeclTy p x ty) -> do
                   addTy x ty
           Typecheck -> do
-              f <- getLastFile
-              printFD4 ("Chequeando tipos de "++f)
               td <- typecheckDecl d
               addDecl' td
               opt <- getOpt
