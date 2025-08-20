@@ -26,6 +26,7 @@ import Lang
       Var(Global, Free) )
 import Subst ( close, close2 )
 import MonadFD4 (MonadFD4, lookupTy, failFD4, failPosFD4)
+import Common (Pos(NoPos))
 
 -- | 'elab' transforma variables ligadas en índices de de Bruijn
 -- en un término dado. 
@@ -48,17 +49,18 @@ elab' env (SLam p [(v, ty)] t) =
      return $ Lam p v ty' (close v e')
 elab' env (SLam p ((v, ty):binds) t) = 
   do ty' <- sty2ty ty
-     e' <- elab' (v:env) (SLam p binds t)
+     e' <- elab' (v:env) (SLam NoPos binds t)
      return $ Lam p v ty' (close v e')
-elab' env (SFix p (f,fty) (x,xty) [] t) =
+elab' env (SFix p (f,fty) [] t) = failPosFD4 p "Punto fijo sin argumentos"
+elab' env (SFix p (f,fty) [(x,xty)] t) =
   do fty' <- sty2ty fty
      xty' <- sty2ty xty
      e' <- elab' (x:f:env) t
      return $ Fix p f fty' x xty' (close2 f x e')
-elab' env (SFix p (f,fty) (x,xty) binds t) =
+elab' env (SFix p (f,fty) ((x,xty):binds) t) =
   do fty' <- sty2ty fty
      xty' <- sty2ty xty
-     e' <- elab' (x:f:env) (SLam p binds t)
+     e' <- elab' (x:f:env) (SLam NoPos binds t)
      return $ Fix p f fty' x xty' (close2 f x e')
 elab' env (SIfZ p c t e) = 
   do c' <- elab' env c
@@ -88,14 +90,14 @@ elab' env (SLetLam p [] (v,vty) def body) = failPosFD4 p "Let sin argumentos"
 elab' env (SLetFix p [] (v,vty) def body) = failPosFD4 p "Let sin argumentos"
 
 elab' env (SLetLam p [(x,xty)] (v,vty) def body) = 
-  elab' env $ SLetVar p (v, SFun xty vty) (SLam p [(x,xty)] def) body
+  elab' env $ SLetVar p (v, SFun xty vty) (SLam NoPos [(x,xty)] def) body
 elab' env (SLetFix p [(x,xty)] (v,vty) def body) =
-  elab' env $ SLetVar p (v, SFun xty vty) (SFix p (v, SFun xty vty) (x, xty) [] def) body
+  elab' env $ SLetVar p (v, SFun xty vty) (SFix NoPos (v, SFun xty vty) [(x, xty)] def) body
 
 elab' env (SLetLam p ((x,xty):binds) (v,vty) def body) =
   elab' env $ SLetVar p (v, types ((x,xty):binds) vty) def body
 elab' env (SLetFix p ((x,xty):binds) (v,vty) def body) = 
-  elab' env (SLetFix p [(x,xty)] (v, types ((x,xty):binds) vty) (SLam p binds def) body)
+  elab' env (SLetFix p [(x,xty)] (v, types ((x,xty):binds) vty) (SLam NoPos binds def) body)
 
 elabDecl :: MonadFD4 m => SDecl STerm -> m (Decl Term)
 elabDecl (SDeclTy p n ty) = 
@@ -107,11 +109,11 @@ elabDecl (SDeclVar p n ty body) =
 elabDecl (SDeclLam p n [] ty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
 elabDecl (SDeclFix p n [] ty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
 elabDecl (SDeclLam p n args ty body) = 
-  elabDecl $ SDeclVar p n (types args ty) (SLam p args body)
+  elabDecl $ SDeclVar p n (types args ty) (SLam NoPos args body)
 elabDecl (SDeclFix p n [(x, xty)] ty body) = 
-  elabDecl $ SDeclVar p n (SFun xty ty) (SFix p (n, SFun xty ty) (x, xty) [] body)
+  elabDecl $ SDeclVar p n (SFun xty ty) (SFix NoPos (n, SFun xty ty) [(x, xty)] body)
 elabDecl (SDeclFix p n args ty body) = 
-  elabDecl $ SDeclFix p n [head args] (types (tail args) ty) (SLam p (tail args) body)
+  elabDecl $ SDeclFix p n [head args] (types (tail args) ty) (SLam NoPos (tail args) body)
 
 -- Funciones auxiliares
 
@@ -125,8 +127,9 @@ sty2ty (SFun t1 t2) =
   do t1' <- sty2ty t1
      t2' <- sty2ty t2
      return $ FunTy t1' t2'
-sty2ty (Syn name) = 
+sty2ty (SSyn name) = 
   do res <- lookupTy name 
      case res of
        Nothing -> failFD4 $ "Sinonimo de tipo no reconocido: " ++ name
-       Just ty -> return ty 
+       Just (Syn _ ty) -> return $ Syn name ty
+       Just ty -> return $ Syn name ty

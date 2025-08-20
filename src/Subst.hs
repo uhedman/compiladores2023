@@ -18,7 +18,7 @@ module Subst where
 import Lang ( Name, Scope(..), Scope2(..), Tm(..), Var(..) )
 import Common ( abort )
 
--- Esta es una función auxiliar que usan el resto de las funciones de este módulo
+-- | Esta es una función auxiliar que usan el resto de las funciones de este módulo
 -- para modificar las vsriables (ligadas y libres) de un término
 varChanger :: (Int -> info -> Name -> Tm info Var) --que hacemos con las variables localmente libres
            -> (Int -> info -> Int ->  Tm info Var) --que hacemos con los indices de De Bruijn
@@ -81,7 +81,7 @@ subst2 n1 n2 (Sc2 m) = varChanger (\_ p n -> V p (Free n)) bnd m
              | i == depth+1 = n1
              | otherwise  = abort "substN: M is not LC"
 
--- `close n t` es la operación inversa a open. Reemplaza
+-- | `close n t` es la operación inversa a open. Reemplaza
 -- las variables `Free n` por la variable ligada `Bound 0`.
 close :: Name -> Tm info Var -> Scope info Var
 close nm t = Sc1 (varChanger lcl (\_ p i -> V p (Bound i)) t)

@@ -22,9 +22,9 @@ import Lang
       Var(Global, Free, Bound) )
 import MonadFD4
     ( failFD4, failPosFD4, lookupDecl, printFD4, MonadFD4, addStep, addDebug )
-import Common ( Pos )
+import Common ( Pos, abort )
 import Subst ( close, close2 )
-import PPrint ( pp )
+import PPrint ( pp, ppName )
 
 -- Lenguaje de valores y marcos
 
@@ -77,7 +77,7 @@ seek t env k = do
     V (p,_) (Global n) -> do
       res <- lookupDecl n
       case res of
-        Nothing -> failPosFD4 p "Variable global no encontrada"
+        Nothing -> failPosFD4 p $ "Error de ejecución: variable no declarada: " ++ ppName n
         Just v -> seek v env k
     Const i (CNat n) -> destroy (Nat i n) k
     Lam i x xty (Sc1 t') -> destroy (Clos (ClFun i env x xty t')) k
@@ -130,4 +130,4 @@ rebuildEnv i (v:vs) body =
 evalOp :: BinaryOp -> Val -> Val -> Val
 evalOp Add (Nat i n) (Nat i' n') = Nat i (n+n')
 evalOp Sub (Nat i n) (Nat i' n') = Nat i (max 0 (n - n'))
-evalOp _ _ _ = error "Operacion binaria con clausuras"
+evalOp _ _ _ = abort "Operacion binaria con clausuras"

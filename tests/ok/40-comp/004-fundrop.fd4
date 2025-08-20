@@ -1,0 +1,6 @@
+let f (x : Nat) : Nat = 
+  let a : Nat = let y : Nat = 2 
+                in  x + y 
+  in a + x
+
+let z : Nat = print "Res: " (f 3)

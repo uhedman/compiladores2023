@@ -61,17 +61,14 @@ import MonadFD4
       printFD4,
       resetStats,
       runFD4,
-      -- runFD4Prof,
       setInter,
       setLastFile,
       gets,
       FD4,
-      -- FD4Prof,
-      -- FD4Debug,
       MonadFD4 )
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
-import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
+import Bytecompile8 ( runBC, bytecompileModule, bcWrite, bcRead )
 import Optimize ( optimizeDecl )
 import System.FilePath ( dropExtension )
 import C (ir2C)
@@ -168,35 +165,36 @@ runVMFile f = do bc <- liftIO $ bcRead f
                  when p $ do stats <- getStats
                              printFD4 (ppStats stats)
 
+-- | Procesa una declaración: la tipa, la optimiza si corresponde,
+-- la agrega al entorno global y la retorna.
+processDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
+processDecl d = do
+  td <- typecheckDecl d
+  case td of
+    Decl {} -> do
+      opt <- getOpt
+      td' <- if opt then optimizeDecl td else return td
+      addDecl td'
+      return td'
+    DeclTy _ x ty -> do
+      addTy x ty
+      return td
+
+-- | Compila un archivo a bytecode, tipando y evaluando sus declaraciones.
 bytecompileFile :: MonadFD4 m => FilePath -> m ()
 bytecompileFile f = do
   decls <- loadFile f
-  tds <- mapM aux decls
+  tds <- mapM processDecl decls
   bc <- bytecompileModule tds
-  liftIO $ bcWrite bc (dropExtension f ++ ".bc32") -- liftIO?
-    where aux d = do td <- typecheckDecl d
-                     case td of
-                       Decl {} -> do opt <- getOpt
-                                     td' <- if opt then optimizeDecl td else return td
-                                     addDecl td'
-                                     return td'
-                       (DeclTy _ x ty) -> do addTy x ty
-                                             return td
+  liftIO $ bcWrite bc (dropExtension f ++ ".bc")
 
+-- | Compila un archivo a código C.
 ccompileFile :: MonadFD4 m => FilePath -> m ()
 ccompileFile f = do
   decls <- loadFile f
-  tds <- mapM aux decls
+  tds <- mapM processDecl decls
   c <- runCC tds
-  liftIO $ writeFile (dropExtension f ++ ".c") (ir2C (IrDecls c))-- liftIO?
-    where aux d = do td <- typecheckDecl d
-                     case td of
-                       Decl {} -> do opt <- getOpt
-                                     td' <- if opt then optimizeDecl td else return td
-                                     addDecl td'
-                                     return td'
-                       (DeclTy _ x ty) -> do addTy x ty
-                                             return td
+  liftIO $ writeFile (dropExtension f ++ ".c") (ir2C (IrDecls c))
 
 compileFile ::  MonadFD4 m => FilePath -> m ()
 compileFile f = do
@@ -205,6 +203,10 @@ compileFile f = do
     when i $ printFD4 ("Abriendo "++f++"...")
     decls <- loadFile f
     mapM_ handleDecl decls
+    prof <- getProf
+    when prof (do stats <- getStats
+                  printFD4 (ppStats stats)
+                  resetStats)
     setInter i
 
 parseIO ::  MonadFD4 m => String -> P a -> String -> m a
@@ -226,9 +228,7 @@ evalDeclCek d = return d
 
 typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
 typecheckDecl decl =
-  do
-    --  printFD4 $ "SDecl (superficial): " ++ show decl
-     decl' <- elabDecl decl
+  do decl' <- elabDecl decl
      tcDecl decl'
 
 handleDecl ::  MonadFD4 m => SDecl STerm -> m ()
@@ -266,21 +266,6 @@ handleDecl d = do
               cek <- getCek
               ed <- if cek then evalDeclCek td' else evalDecl td'
               addDecl' ed
-              prof <- getProf
-              when prof (do stats <- getStats
-                            printFD4 (ppStats stats)
-                            resetStats)
-          CC -> do
-              td <- typecheckDecl d
-              opt <- getOpt
-              td' <- if opt then optimizeDecl td else return td
-              cek <- getCek
-              ed <- if cek then evalDeclCek td' else evalDecl td'
-              addDecl' ed
-              prof <- getProf
-              when prof (do stats <- getStats
-                            printFD4 (ppStats stats)
-                            resetStats)
           _ -> return ()
   where addDecl' (DeclTy _ x ty) = addTy x ty
         addDecl' t = addDecl t

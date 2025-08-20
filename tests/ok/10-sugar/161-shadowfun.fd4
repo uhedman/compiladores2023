@@ -1,0 +1,6 @@
+let f (x:Nat) : Nat =
+  let f (x:Nat) : Nat = x+1+2 in
+  let f (x:Nat) : Nat = f x in
+  f x
+
+let _ : Nat = print "" (f 17)

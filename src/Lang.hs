@@ -20,7 +20,7 @@ Definiciones de distintos tipos de datos:
 
 module Lang where
 
-import           Common                         ( Pos )
+import           Common                         ( Pos, abort )
 import           Data.List.Extra                ( nubSort )
 
 -- | AST the términos superficiales
@@ -31,7 +31,7 @@ data STm info ty var =
   | SApp info (STm info ty var) (STm info ty var)
   | SPrint info String (STm info ty var)
   | SBinaryOp info BinaryOp (STm info ty var) (STm info ty var)
-  | SFix info (var, ty) (var, ty) [(var, ty)] (STm info ty var)
+  | SFix info (var, ty) [(var, ty)] (STm info ty var)
   | SIfZ info (STm info ty var) (STm info ty var) (STm info ty var)
   | SLetVar info (var, ty) (STm info ty var) (STm info ty var)
   | SLetLam info [(var, ty)] (var, ty) (STm info ty var) (STm info ty var)
@@ -42,6 +42,7 @@ data STm info ty var =
 data Ty =
     NatTy
   | FunTy Ty Ty
+  | Syn Name Ty
   deriving (Show,Eq)
 
 type Name = String
@@ -51,7 +52,7 @@ type STerm = STm Pos STy Name -- ^ 'STm' tiene 'Name's como variables ligadas y 
 data STy = 
     SNatTy 
   | SFun STy STy 
-  | Syn Name 
+  | SSyn Name 
   deriving (Show,Eq)
 
 data SDecl a = 
@@ -148,6 +149,14 @@ getInfo (BinaryOp i _ _ _) = i
 
 getTy :: TTerm -> Ty
 getTy = snd . getInfo
+
+getDom :: Ty -> Ty
+getDom (FunTy dom _) = dom
+getDom _ = abort "Error de tipos"
+
+getCod :: Ty -> Ty
+getCod (FunTy _ cod) = cod
+getCod _ = abort "Error de tipos"
 
 getPos :: TTerm -> Pos
 getPos = fst . getInfo

@@ -19,7 +19,7 @@ import Lang
       Tm(Let, V, App, Lam, Fix, Print, BinaryOp, IfZ, Const),
       Var(Global) )
 import Subst ( subst2, subst )
-import MonadFD4 ( MonadFD4, lookupDecl, failFD4, printFD4 )
+import MonadFD4 ( MonadFD4, lookupDecl, printFD4, failPosFD4 )
 import PPrint ( ppName, pp )
 
 -- | Semántica de operadores binarios
@@ -29,11 +29,11 @@ semOp Sub x y = max 0 (x - y)
 
 -- | Evaluador de términos CBV
 eval ::  MonadFD4 m => TTerm -> m TTerm
-eval (V _ (Global nm)) = do
+eval (V (p, _) (Global nm)) = do
   -- unfold and keep going
   mtm <- lookupDecl nm
   case mtm of
-    Nothing -> failFD4 $ "Error de ejecución: variable no declarada: " ++ ppName nm
+    Nothing -> failPosFD4 p $ "Error de ejecución: variable no declarada: " ++ ppName nm
     Just t -> eval t
 
 eval (App p l r) = do

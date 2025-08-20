@@ -24,4 +24,13 @@ test: build vm
 vm:
 	$(MAKE) -C vm
 
+clean:
+	find tests \( \
+		-name "*.bc" -o \
+		-name "*.c" -o \
+		-name "*.fd4.*" -o \
+		-name "*.bin" \
+	\) -type f -delete
+	$(MAKE) -C vm clean || true
+
 .PHONY: vm
