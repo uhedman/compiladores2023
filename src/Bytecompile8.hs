@@ -27,7 +27,14 @@ import Lang
       TTerm,
       Tm(Let, V, Const, Lam, App, Print, BinaryOp, Fix, IfZ),
       Var(Free, Bound, Global) )
-import MonadFD4 ( failPosFD4, printFD4, printStrFD4, MonadFD4 )
+import MonadFD4
+    ( failPosFD4,
+      printFD4,
+      printStrFD4,
+      MonadFD4,
+      addOp,
+      setMem,
+      addClos)
 import Subst ( close )
 
 import qualified Data.ByteString.Lazy as BS
@@ -262,38 +269,38 @@ runBC bc = go (bc, [], [])
   where go :: MonadFD4 m => (Bytecode, [Val], [Val]) -> m ()
         go (CONST:c, e, s) = 
           let n = word2int $ take 4 c
-          in  go (drop 4 c, e, N n:s)
-        go (ADD:c, e, N m:N n:s) = go (c, e, N (m+n):s)
-        go (SUB:c, e, N m:N n:s) = go (c, e, N (max (n-m) 0):s)
+          in  addOp >> setMem (length s + 1) >> go (drop 4 c, e, N n:s)
+        go (ADD:c, e, N m:N n:s) = addOp >> go (c, e, N (m+n):s)
+        go (SUB:c, e, N m:N n:s) = addOp >> go (c, e, N (max (n-m) 0):s)
         go (ACCESS:c, e, s) = 
           let i = word2int $ take 4 c
-          in  go (drop 4 c, e, e!!i:s)
-        go (CALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, RA (e,c):s)
-        go (TAILCALL:c, e, v:C (ef,cf):s) = go (cf, v:ef, s)
+          in  addOp >> setMem (length s + 1) >> go (drop 4 c, e, e!!i:s)
+        go (CALL:c, e, v:C (ef,cf):s) = addOp >> go (cf, v:ef, RA (e,c):s)
+        go (TAILCALL:c, e, v:C (ef,cf):s) = addOp >> go (cf, v:ef, s)
         go (FUNCTION:c, e, s) = 
           let n = word2int $ take 4 c
               (f,c') = splitAt n (drop 4 c)
-          in  go (c', e, C (e, f):s)
-        go (RETURN:_, _, v:RA (e,c):s) = go (c, e, v:s)
+          in  addOp >> addClos >> setMem (length s + 1) >> go (c', e, C (e, f):s)
+        go (RETURN:_, _, v:RA (e,c):s) = addOp >> go (c, e, v:s)
         go (FIX:c, e, C (ef,cf):s) = 
           let efix = C (efix, cf):ef
-          in  go (c, e, C (efix, cf):s)
-        go (SHIFT:c, e, v:s) = go (c, v:e, s)
-        go (DROP:c, _:e, s) = go (c, e, s)
+          in  addOp >> addClos >> go (c, e, C (efix, cf):s)
+        go (SHIFT:c, e, v:s) = addOp >> go (c, v:e, s)
+        go (DROP:c, _:e, s) = addOp >> go (c, e, s)
         go (PRINTN:c, e, N n:s) = 
           do printFD4 (show n)
-             go (c, e, N n:s)
+             addOp >> go (c, e, N n:s)
         go (PRINT:c, e, s) = 
           do let (str,_:c') = span (/=NULL) c
              printStrFD4 $ bc2string str
-             go (c', e, s)
+             addOp >> go (c', e, s)
         go (CJUMP:c, e, N n:s) = 
           if n == 0
-          then go (drop 4 c, e, s)
+          then addOp >> go (drop 4 c, e, s)
           else let l = word2int $ take 4 c
-               in  go (drop (l+4) c, e, s)
+               in  addOp >> go (drop (l+4) c, e, s)
         go (JUMP:c, e, s) = 
           let n = word2int $ take 4 c
-          in  go (drop (n+4) c, e, s)
-        go (STOP:_, _, _) = return ()
+          in  addOp >> go (drop (n+4) c, e, s)
+        go (STOP:_, _, _) = addOp
         go (c, e, s) = abort $ "Patron no reconocido: <" ++ showBC c ++ ",\n" ++ concatMap showVal e ++ ",\n" ++ concatMap showVal s ++ ">"

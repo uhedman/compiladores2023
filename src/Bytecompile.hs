@@ -251,32 +251,32 @@ bcRead filename = (map fromIntegral <$> un32) . decode <$> BS.readFile filename
 runBC :: MonadFD4 m => Bytecode -> m ()
 runBC bc = go (bc, [], [])
   where go :: MonadFD4 m => (Bytecode, [Val], [Val]) -> m ()
-        go (CONST:n:c, e, s) = addOp >> go (c, e, N n:s)
-        go (ADD:c, e, N m:N n:s) = setMem (length s + 2) >> addOp >> go (c, e, N (m+n):s)
-        go (SUB:c, e, N m:N n:s) = setMem (length s + 2) >> addOp >> go (c, e, N (max (n-m) 0):s)
-        go (ACCESS:i:c, e, s) = addOp >> go (c, e, e!!i:s)
-        go (CALL:c, e, v:C (ef,cf):s) = setMem (length s + 2) >> addClos >> addOp >> go (cf, v:ef, RA (e,c):s)
-        go (TAILCALL:c, e, v:C (ef,cf):s) = setMem (length s + 2) >> addClos >> addOp >> go (cf, v:ef, s)
+        go (CONST:n:c, e, s) = addOp >> setMem (length s + 1) >> go (c, e, N n:s)
+        go (ADD:c, e, N m:N n:s) = addOp >> go (c, e, N (m+n):s)
+        go (SUB:c, e, N m:N n:s) = addOp >> go (c, e, N (max (n-m) 0):s)
+        go (ACCESS:i:c, e, s) = addOp >> setMem (length s + 1) >> go (c, e, e!!i:s)
+        go (CALL:c, e, v:C (ef,cf):s) = addOp >> go (cf, v:ef, RA (e,c):s)
+        go (TAILCALL:c, e, v:C (ef,cf):s) = addOp >> go (cf, v:ef, s)
         go (FUNCTION:n:c, e, s) = 
           let (f,c') = splitAt n c
-          in  addOp >> go (c', e, C (e, f):s)
-        go (RETURN:_, _, v:RA (e,c):s) = setMem (length s + 2) >> addClos >> addOp >> go (c, e, v:s)
+          in  addOp >> addClos >> setMem (length s + 1) >> go (c', e, C (e, f):s)
+        go (RETURN:_, _, v:RA (e,c):s) = addOp >> go (c, e, v:s)
         go (FIX:c, e, C (ef,cf):s) = 
           let efix = C (efix, cf):ef
-          in  setMem (length s + 1) >> addClos >> addOp >> go (c, e, C (efix, cf):s)
-        go (SHIFT:c, e, v:s) = setMem (length s + 1) >> addOp >> go (c, v:e, s)
+          in  addOp >> addClos >> go (c, e, C (efix, cf):s)
+        go (SHIFT:c, e, v:s) = addOp >> go (c, v:e, s)
         go (DROP:c, _:e, s) = addOp >> go (c, e, s)
         go (PRINTN:c, e, N n:s) = 
           do printFD4 (show n)
-             setMem (length s + 1) >> addOp >> go (c, e, N n:s)
+             addOp >> go (c, e, N n:s)
         go (PRINT:c, e, s) = 
           do let (str,_:c') = span (/=NULL) c
              printStrFD4 $ bc2string str
              addOp >> go (c', e, s)
         go (CJUMP:l:c, e, N n:s) = 
           if n == 0
-          then setMem (length s + 1) >> addOp >> go (c, e, s)
-          else setMem (length s + 1) >> addOp >> go (drop l c, e, s)
+          then addOp >> go (c, e, s)
+          else addOp >> go (drop l c, e, s)
         go (JUMP:n:c, e, s) = addOp >> go (drop n c, e, s)
         go (STOP:_, _, _) = addOp
         go (c, e, s) = abort $ "Patron no reconocido: <" ++ showBC c ++ ",\n" ++ concatMap showVal e ++ ",\n" ++ concatMap showVal s ++ ">"

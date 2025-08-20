@@ -21,7 +21,7 @@ import Lang
       STerm,
       STm(..),
       STy(..) )
-import Common ( Pos(..) )
+import Common ( Pos(..), abort )
 import Text.Parsec
     ( ParseError,
       Parsec,
@@ -272,4 +272,4 @@ runP p s filename = runParser (whiteSpace *> p <* eof) () filename s
 parse :: String -> STerm
 parse s = case runP expr s "" of
             Right t -> t
-            Left e -> error ("no parse: " ++ show s)
+            Left e -> abort ("no parse: " ++ show s)

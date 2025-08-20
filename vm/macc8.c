@@ -29,7 +29,7 @@ enum {
 	CALL     = 5,
 	ADD      = 6,
 	SUB      = 7,
-	IFZ      = 8,
+	CJUMP    = 8,
 	FIX      = 9,
 	STOP     = 10,
 	SHIFT    = 11,
@@ -340,7 +340,7 @@ void run(code init_c)
 			break;
 		}
 
-		case IFZ: {
+		case CJUMP: {
 			value val = *--s;
 			uint32_t len = 0;
 			for (int i = 0; i < 4; ++i)
