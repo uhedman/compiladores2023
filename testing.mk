@@ -6,26 +6,26 @@ TESTDIRS += tests/ok/30-opt
 TESTS	:= $(shell find $(TESTDIRS) -name '*.fd4' -type f | sort)
 
 # Los binarios. La primer línea es una magia para encontrar el
-# ejecutable que crea stack, porque correr 'stack run' es recontra lento
+# ejecutable que crea stack, porque correr 'cabal run' es recontra lento
 # (~30x). Además, encontralo nos sirve para marcar la dependencia, y no
 # volver a correr los tests si el compilador no cambió (pero sí correr
 # la VM si cambió la VM, etc).
 EXE	:= $(shell cabal exec whereis compiladores2023 | awk '{print $$2};')
 VM	:= ./vm/macc
-R 	:= gcc runtime.c -lgc -w
+CC  := gcc
+CFLAGS := -lgc
 
 EXTRAFLAGS	:=
-# EXTRAFLAGS	+= --optimize
 
 # Las reglas a chequear. Se puede deshabilitar toda una familia de tests
 # comentando una de estas líneas.
 # CHECK	+= $(patsubst %,%.check_eval,$(TESTS))
 # CHECK	+= $(patsubst %,%.check_cek,$(TESTS))
-# CHECK	+= $(patsubst %,%.check_bc32_h,$(TESTS))
-# CHECK	+= $(patsubst %,%.check_bc32,$(TESTS))
+CHECK	+= $(patsubst %,%.check_bc_h,$(TESTS))
+# CHECK	+= $(patsubst %,%.check_bc,$(TESTS))
 # CHECK	+= $(patsubst %,%.check_eval_opt,$(TESTS))
 # CHECK	+= $(patsubst %,%.check_opt,$(TESTS))
-CHECK += $(patsubst %,%.check_c,$(TESTS))
+# CHECK	+= $(patsubst %,%.check_cc,$(TESTS))
 
 # Ejemplo: así se puede apagar un test en particular.
 CHECK	:= $(filter-out tests/ok/00-basicos/401-inf.fd4.% \
@@ -88,27 +88,27 @@ accept: $(filter-out tests/ok/00-basicos/401-inf.fd4.accept,$(patsubst %,%.accep
 
 # Bytecode. Primero la regla para generar el bytecode, no se chequea
 # nada.
-%.bc32: %.fd4 $(EXE)
+%.bc: %.fd4 $(EXE)
 	$(Q)$(EXE) $(EXTRAFLAGS) --bytecompile $< >/dev/null
 
 # Correr bytecode para generar la salida (con VM en C).
 # Finalmente la comparación.
-%.fd4.actual_out_bc32: %.bc32 $(VM)
+%.fd4.actual_out_bc: %.bc $(VM)
 	$(Q)$(VM) $< > $@
 
-%.check_bc32: %.out %.actual_out_bc32
+%.check_bc: %.out %.actual_out_bc
 	$(Q)diff -u $^
 	$(Q)touch $@
-	@echo "OK	BC32	$(patsubst %.out,%,$<)"
+	@echo "OK	bc	$(patsubst %.out,%,$<)"
 
 # Idem pero para Macchina en Haskell.
-%.fd4.actual_out_bc32_h: %.bc32 $(EXE)
+%.fd4.actual_out_bc_h: %.bc $(EXE)
 	$(Q)$(EXE) $(EXTRAFLAGS) --runVM $< > $@
 
-%.check_bc32_h: %.out %.actual_out_bc32_h
+%.check_bc_h: %.out %.actual_out_bc_h
 	$(Q)diff -u $^
 	$(Q)touch $@
-	@echo "OK	BC32 H	$(patsubst %.out,%,$<)"
+	@echo "OK	bc H	$(patsubst %.out,%,$<)"
 
 # Chequear optimizaciones. No se corre nada, sólo se compara
 # la salida de --typecheck --optimize respecto a la esperada
@@ -135,28 +135,31 @@ accept: $(filter-out tests/ok/00-basicos/401-inf.fd4.accept,$(patsubst %,%.accep
 	$(Q)touch $@
 	@echo "OK	EVALOPT	$(patsubst %.out,%,$<)"
 
-# Reglas para compilar a C y ejecutar
+
+# Generamos el código en C, no se chequea nada.
 %.c: %.fd4 $(EXE)
 	$(Q)$(EXE) $(EXTRAFLAGS) --cc $< >/dev/null
 
-%.fd4.actual_out_c: %.c runtime.c
-	$(Q)$(R) $<            # compila el C con runtime.c
-	$(Q)./a.out > $@       # ejecuta y guarda la salida
+# Compilamos y ejecutamos el archivo guardado. Por último, comparamos.
+%.fd4.actual_out_cc: %.c runtime.c
+	$(Q)$(CC) runtime.c $< -o $(patsubst %.c,%.bin,$<) $(CFLAGS)
+	$(Q)./$(patsubst %.c,%.bin,$<) > $@
 
-%.check_c: %.out %.actual_out_c
+%.check_cc: %.out %.actual_out_cc
 	$(Q)diff -u $^
 	$(Q)touch $@
-	@echo "OK	C		$(patsubst %.out,%,$<)"
+	@echo "OK	CC	$(patsubst %.out,%,$<)"
 
 # Estas directivas indican que NO se borren los archivos intermedios,
 # así podemos examinarlos, particularmente cuando algo no anda.
 .SECONDARY: $(patsubst %,%.actual_out_eval,$(TESTS))
 .SECONDARY: $(patsubst %,%.actual_out_cek,$(TESTS))
-.SECONDARY: $(patsubst %,%.actual_out_bc32,$(TESTS))
-.SECONDARY: $(patsubst %,%.actual_out_bc32_h,$(TESTS))
+.SECONDARY: $(patsubst %,%.actual_out_bc,$(TESTS))
+.SECONDARY: $(patsubst %,%.actual_out_bc_h,$(TESTS))
 .SECONDARY: $(patsubst %,%.actual_out_eval_opt,$(TESTS))
-.SECONDARY: $(patsubst %,%.actual_out_c,$(TESTS))
 .SECONDARY: $(patsubst %,%.actual_opt_out,$(TESTS))
-.SECONDARY: $(patsubst %.fd4,%.bc32,%.c,$(TESTS))
+.SECONDARY: $(patsubst %,%.actual_out_cc,$(TESTS))
+.SECONDARY: $(patsubst %.fd4,%.bc,$(TESTS))
+.SECONDARY: $(patsubst %.fd4,%.c,$(TESTS))
 
 .PHONY: test_all accept

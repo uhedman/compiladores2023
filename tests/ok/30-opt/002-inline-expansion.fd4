@@ -1,0 +1,3 @@
+let a : Nat = 3
+let b : Nat = let f (c : Nat) : Nat = c + a in 2
+let printnn : Nat = print "" a

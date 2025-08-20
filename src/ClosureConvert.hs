@@ -10,13 +10,14 @@ import Lang
       TTerm,
       Tm(Let, V, Const, Lam, App, Print, BinaryOp, Fix, IfZ),
       Ty(..),
-      Var(Global, Bound, Free) )
+      Var(Global, Bound, Free), getCod )
 import Control.Monad.Writer
     ( Writer, runWriter, MonadWriter(tell) )
 import Control.Monad.State
     ( modify, MonadState(get), StateT(runStateT) )
 import Subst ( open, open2 )
-import MonadFD4 (MonadFD4, printFD4)
+import MonadFD4 (MonadFD4)
+import Common (abort)
 
 buildLets :: [(Name, Ty)] -> Name -> Ir -> Int -> Ir
 buildLets ((x,ty):vs) clo t i  = IrLet x (ty2ir ty) (IrAccess (IrVar clo) (ty2ir ty) i) (buildLets vs clo t (i+1))
@@ -24,8 +25,8 @@ buildLets [] _ t _ = t
 
 -- Closure convert y hoisting
 convert :: TTerm -> StateT Int (Writer [IrDecl]) Ir
-convert (V _ Bound {}) = error "No se esperaban variables ligadas" 
-convert (V _ (Free n)) = return (IrVar n)
+convert (V _ Bound {}) = abort "No se esperaban variables ligadas" 
+convert (V _ (Free n)) = return $ IrVar n
 convert (V _ (Global n)) = return $ IrGlobal n
 convert (Const _ c) = return $ IrConst c
 convert (Lam (_,ty) _ xty body@(Sc1 t)) = 
@@ -36,7 +37,7 @@ convert (Lam (_,ty) _ xty body@(Sc1 t)) =
      let fvs = freeVarsTy t
      let bbody = buildLets fvs cloName body' 1
      tell [IrFun funName (ty2ir (getCod ty)) [(cloName, IrClo), (xname, ty2ir xty)] bbody]
-     return (MkClosure funName (map (IrVar . fst) fvs))
+     return $ MkClosure funName (map (IrVar . fst) fvs)
 convert (App (_,ty) l r) = 
   do funcIr <- convert l 
      argIr <- convert r 
@@ -59,7 +60,7 @@ convert (Fix _ _ fty _ xty body@(Sc2 t))  =
      let fvs = freeVarsTy t
      let bbody = IrLet fname (ty2ir fty) (IrVar cloName) (buildLets fvs cloName body' 1)
      tell [IrFun funName (ty2ir (getCod fty)) [(cloName, IrClo), (xname, ty2ir xty)] bbody]
-     return (MkClosure funName (map (IrVar . fst) fvs))
+     return $ MkClosure funName (map (IrVar . fst) fvs)
 convert (IfZ _ c t e)  = 
   do c' <- convert c 
      t' <- convert t 
@@ -76,12 +77,10 @@ convertDecl (Decl _ x body) =
   do b <- convert body
      tell [IrVal x IrInt b]
      return b
-convertDecl DeclTy {} = error "No se soportan sinonimos de tipo" 
+convertDecl DeclTy {} = abort "No se soportan sinonimos de tipo" 
 
 runCC :: MonadFD4 m => [Decl TTerm] -> m [IrDecl]
 runCC decls = do let ird = snd $ runWriter (runStateT (mapM convertDecl decls) 0)
-                 printFD4 $ show ird
-                 printFD4 $ unlines $ map show decls
                  return ird
 
 -- Funciones auxiliares
@@ -93,11 +92,4 @@ getFreshName = do int <- get
 ty2ir :: Ty -> IrTy
 ty2ir NatTy = IrInt
 ty2ir FunTy {} = IrFunTy
-
-getDom :: Ty -> Ty
-getDom (FunTy dom _) = dom
-getDom _ = error "Error de tipos"
-
-getCod :: Ty -> Ty
-getCod (FunTy _ cod) = cod
-getCod _ = error "Error de tipos"
+ty2ir (Syn _ t) = ty2ir t

@@ -1,1 +1,2 @@
-let y:Nat = let (f:Nat->Nat) = fun (x:Nat) -> x+1 in 1
+let y : Nat = let f (x : Nat) : Nat = x + 1 in 1
+let x : Nat = let z : Nat = 3 in z

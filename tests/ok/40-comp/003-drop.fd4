@@ -1,0 +1,2 @@
+let z : Nat = (fun (x : Nat) -> (let y : Nat = 1 in 2) + x) 0
+let p : Nat = print "" z

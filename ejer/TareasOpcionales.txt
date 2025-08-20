@@ -1,0 +1,143 @@
+Optimizando la maquina virtual
+
+5 (opcional)
+Se puede detectar una variable con nombre "_" y quitar el valor de la pila una vez evaluada la definicion del let
+
+bcc ms (Let _ nm _ e1 (Sc1 e2)) = 
+  do e1' <- bcd ms e1
+     case nm of
+       "_" -> do e2' <- bcc (1:ms) e2 
+                 return $ e1'++[SHIFT, DROP]++e2'
+       _   -> do e2' <- bcc (0:ms) e2
+                 return $ e1'++[SHIFT]++e2'
+
+Se podria cambiar [SHIFT, DROP] por una unica operacion que elimine el valor en la cima de la pila.
+Para que este cambio sea posible, se debe llevar un entorno donde las variables sin nombre valen 1
+y las variables comunes un 0 para luego acomodar las llamadas ACCESS
+
+6 (opcional).
+Observacion 1: BCD = C
+Lema 1 (versión corregida): Sea C la compilación normal, BCT la compilación optimizada para cuerpos con TCO y t un término FD4,
+len BCT(t) ≤ len C(t) + 1.
+
+Casos base:
+len BCT(Bound n) =
+len (BCD(Bound n) ++ [RETURN]) =   < Obs. 1 >
+len C(Bound n) + 1 ≤ 
+len C(Bound n) + 1
+
+len BCT(Const n) = 
+len (BCD(Const n) ++ [RETURN]) =   < Obs. 1 >
+len C(Const n) + 1 ≤ 
+len C(Const n) + 1
+
+Casos inductivos:
+len BCT(App l r) =
+len (BCD(l) ++ BCD(r) ++ [TAILCALL]) =   < Obs. 1 >
+len C(l) + len C(r) + 1 =
+len (C(l) ++ C(r) ++ [CALL]) =
+len C(App l r)
+
+len BCT(IfZ c t e) =
+len (BCD(c) ++ [CJUMP, length BCT(t)+2] ++ BCT(t) ++ BCT(e)) =
+len BCD(c) + 2 + len BCT(t) + len BCT(e) <=   < HI y Obs. 1 >
+len C(c) + 2 + len C(t) + 1 + len C(e) + 1 = 
+len C(c) + len [CJUMP, length C(t)+2] + len C(t) + len [JUMP, len C(e)] + len C(e) = 
+len (C(c) ++ [CJUMP, length C(t)+2] ++ C(t) ++ [JUMP, length C(e)] ++ C(e)) =
+len C(IfZ c t e)
+
+len BCT(Let x def body) =
+  Caso x = "_":
+    len (BCD(def) ++ [SHIFT, DROP] ++ BCT(body)) =   < Obs. 1 >
+    len C(def) + 2 + len BCT(body) <= HI
+    len C(def) + 2 + len C(body) + 1 = 
+    len (C(def) ++ [SHIFT] ++ C(body) ++ [DROP]) + 1 =
+    len C(Let x def body) + 1
+
+  Caso x ≠ "_":
+    len (BCD(def) ++ [SHIFT] ++ BCT(body)) =   < Obs. 1 >
+    len C(def) + 1 + len BCT(body) <= HI
+    len C(def) + 1 + len C(body) + 1 = 
+    len (C(def) ++ [SHIFT] ++ C(body) ++ [DROP]) =
+    len C(Let x def body) <
+    len C(Let x def body) + 1
+
+Para los otros casos:
+len BCT(t) =
+len (BCD(t) ++ [RETURN]) =   < Obs. 1 >
+len C(t) + 1
+
+
+Teorema: Sea C la compilación normal, BCC la compilación optimizada del programa y t un término FD4,
+len BCC(t) ≤ len C(t) + 1.
+
+Casos base:
+len BCC(Bound n) =  < BCC(Bound n) = C(Bound n) >
+len C(Bound n)
+
+len BCC(Const n) =  < BCC(Const n) = C(Const n) >
+len C(Const n)
+
+Casos inductivos:
+
+len BCC(Lam s) =
+len ([FUNCTION, length BCT(s)] ++ BCT(s)) =
+2 + len BCT(s) <=   < Lema 1 >
+2 + len C(s) + 1 =   
+len ([FUNCTION, length C(s)] ++ C(s) ++ [RETURN]) =
+len C(Lam s)
+
+len BCC(App l r) =
+len (BCD(l) ++ BCD(r) ++ [CALL]) = (Obs. 1)
+len (C(l) ++ C(r) ++ [CALL]) =
+len C(App l r)
+
+len BCC(Print str t) =
+len (BCD(t) ++ [PRINT] ++ string2bc str ++ [NULL, PRINTN]) =   < Obs. 1 >
+len (C(t) ++ [PRINT] ++ string2bc str ++ [NULL, PRINTN]) =
+len C(Print str t)
+
+len BCC(BinaryOp ADD l r) =
+len (BCD(l) ++ BCD(r) ++ [ADD]) = (Obs. 1)
+len (C(l) ++ C(r) ++ [ADD]) =
+len C(BinaryOp ADD l r)
+
+len BCC(BinaryOp SUB l r) =
+len (BCD(l) ++ BCD(r) ++ [SUB]) = (Obs. 1)
+len (C(l) ++ C(r) ++ [SUB]) =
+len C(BinaryOp SUB l r)
+
+len BCC(Fix s) =
+len ([FUNCTION, length BCT(s)] ++ BCT(s) ++ [FIX]) =   
+2 + len BCT(s) + 1 <=   < Lema 1 >
+2 + len C(s) + 2 =   
+len ([FUNCTION, length C(s)] ++ C(s) ++ [RETURN, FIX]) =
+len C(Fix s)
+
+len BCC(IfZ c t e) =
+len (BCD(c) ++ [CJUMP, length BCD(t)+2] ++ BCD(t) ++ [JUMP, length BCD(e)] ++ BCD(e)) =   < Obs. 1 >
+len (C(c) ++ [CJUMP, length C(t)+2] ++ C(t) ++ [JUMP, length C(e)] ++ C(e)) =   < Obs. 1 >
+len C(IfZ c t e)
+
+len BCC(Let x def body) =
+  Caso x = "_":
+    len (BCD(def) ++ [SHIFT, DROP] ++ BCC(body)) =   < Obs. 1 >
+    len C(def) + 2 + len BCC(body) <= HI
+    len C(def) + 2 + len C(body) = 
+    len (C(def) ++ [SHIFT] ++ C(body) ++ [DROP]) =
+    len C(Let x def body)
+
+  Caso x ≠ "_":
+    len (BCD(def) ++ [SHIFT] ++ BCC(body)) =   < Obs. 1 >
+    len C(def) + 1 + len BCC(body) <= HI
+    len C(def) + 1 + len C(body) <
+    len C(def) + 1 + len C(body) + 1 =
+    len (C(def) ++ [SHIFT] ++ C(body) ++ [DROP]) =
+    len C(Let x def body)
+
+
+7 (opcional)
+El programa:
+let rec f (x:Nat) : Nat = f x
+let ret : Nat = f 0
+Usa memoria constante porque f es una funcion recursiva de cola

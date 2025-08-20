@@ -19,8 +19,7 @@ import Lang
       Name,
       SDecl(SDeclLam, SDeclTy, SDeclVar, SDeclFix),
       STerm,
-      STm(SLetLam, SPrint, SBinaryOp, SConst, SV, SLam, SApp, SIfZ, SFix,
-          SLetVar, SLetFix),
+      STm(..),
       STy(..) )
 import Common ( Pos(..) )
 import Text.Parsec
@@ -109,7 +108,7 @@ getPos = do pos <- getPosition
 tyatom :: P STy
 tyatom = (reserved "Nat" >> return SNatTy)
          <|> do v <-var
-                return (Syn v)
+                return (SSyn v)
          <|> parens typeP
 
 typeP :: P STy
@@ -183,11 +182,10 @@ fix :: P STerm
 fix = do i <- getPos
          reserved "fix"
          ([f], fty) <- parens binding
-         ([x], xty) <- parens binding
          binds <- many (parens binding) <|> return []
          reservedOp "->"
          t <- expr
-         return (SFix i (f,fty) (x,xty) (spreadBinds binds) t)
+         return (SFix i (f,fty) (spreadBinds binds) t)
 
 expvar :: P STerm
 expvar = do i <- getPos

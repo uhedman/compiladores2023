@@ -97,19 +97,27 @@ typeError t s = do
 -- | 'expect' chequea que el tipo esperado sea igual al que se obtuvo
 -- y lanza un error si no lo es.
 expect :: MonadFD4 m => Ty    -- ^ tipo esperado
-                     -> TTerm
-                     -> m TTerm
+           -> TTerm
+           -> m TTerm
 expect ty tt = let ty' = getTy tt
-               in if ty == ty' then return tt 
-                               else typeError tt $ 
-              "Tipo esperado: "++ ppTy ty
-            ++"\npero se obtuvo: "++ ppTy ty'
+                   ty1 = realTy ty
+                   ty2 = realTy ty'
+               in if ty1 == ty2 then return tt
+                  else typeError tt $
+                    "Tipo esperado: " ++ ppTy ty
+                    ++ "\npero se obtuvo: " ++ ppTy ty'
+  where
+    realTy (Syn _ t') = realTy t'
+    realTy t          = t
 
 -- | 'domCod chequea que un tipo sea función
 -- | devuelve un par con el tipo del dominio y el codominio de la función
 domCod :: MonadFD4 m => TTerm -> m (Ty, Ty)
 domCod tt = case getTy tt of
     FunTy d c -> return (d, c)
+    Syn _ t -> case t of
+        FunTy d c -> return (d, c)
+        _         -> typeError tt $ "Se esperaba un tipo función, pero se obtuvo: " ++ ppTy (getTy tt)
     _         -> typeError tt $ "Se esperaba un tipo función, pero se obtuvo: " ++ ppTy (getTy tt)
 
 -- | 'tcDecl' chequea el tipo de una declaración

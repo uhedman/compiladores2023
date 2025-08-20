@@ -22,18 +22,17 @@ import Lang
     ( getTy,
       BinaryOp(..),
       Const(..),
-      Decl(DeclTy, Decl, declName),
+      Decl(..),
       Name,
       STerm,
-      STm(SBinaryOp, SV, SConst, SLam, SApp, SFix, SIfZ, SPrint, SLetLam,
-          SLetFix, SLetVar),
+      STm(..),
       STy(..),
       TTerm,
       Tm(..),
       Ty(..),
       Var(..) )
 import Subst ( open, open2 )
-import Common ( Pos )
+import Common ( Pos, abort )
 
 import Data.Text ( unpack )
 import Prettyprinter.Render.Terminal
@@ -60,35 +59,50 @@ freshen ns n = let cands = n : map (\i -> n ++ show i) [0..]
 -- a términos fully named abriendo todos las variables de ligadura que va encontrando
 -- Debe tener cuidado de no abrir términos con nombres que ya fueron abiertos.
 -- Estos nombres se encuentran en la lista ns (primer argumento).
+openAll' :: (i -> Pos) -> [Name] -> Tm i Var -> STerm
+openAll' gp ns (Fix p f fty x xty t) = 
+  let x' = freshen ns x
+  in  case openAll gp (x':f:ns) (open2 f x' t) of
+        SLam _ binds t' -> SFix (gp p) (f, returnTy ((x',ty2sty xty):binds) fty) ((x',ty2sty xty):binds) t'
+        t' -> SFix (gp p) (f, returnTy [(x,ty2sty xty)] fty) [(x',ty2sty xty)] t'
+openAll' gp ns t = openAll gp ns t
+
 openAll :: (i -> Pos) -> [Name] -> Tm i Var -> STerm
 openAll gp ns (V p v) = case v of 
-      Bound i ->  SV (gp p) $ "(Bound "++show i++")" --este caso no debería aparecer
+      Bound  i -> SV (gp p) $ "(Bound "++show i++")" --este caso no debería aparecer
                                                --si el término es localmente cerrado
-      Free x -> SV (gp p) x
+      Free   x -> SV (gp p) x
       Global x -> SV (gp p) x
 openAll gp ns (Const p c) = SConst (gp p) c
 openAll gp ns (Lam p x ty t) = 
   let x' = freshen ns x 
-  in case openAll gp (x':ns) (open x' t) of
-        SLam y tys t' -> SLam (gp p) ((x',ty2sty ty):tys) t'
-        t' -> SLam (gp p) [(x',ty2sty ty)] t'
+  in  case openAll gp (x':ns) (open x' t) of
+        SLam _ binds t' -> SLam (gp p) ((x',ty2sty ty):binds) t'
+        t'              -> SLam (gp p) [(x',ty2sty ty)] t'
 openAll gp ns (App p t u) = SApp (gp p) (openAll gp ns t) (openAll gp ns u)
 openAll gp ns (Fix p f fty x xty t) = 
   let x' = freshen ns x
       f' = freshen (x':ns) f
-  in case openAll gp (x:f:ns) (open2 f' x' t) of
-    SLam y tys t' -> SFix (gp p) (f',ty2sty fty) (x',ty2sty xty) tys t'
-    t' -> SFix (gp p) (f',ty2sty fty) (x',ty2sty xty) [] t'
+  in  case openAll gp (x':f':ns) (open2 f' x' t) of
+        SLam _ binds t' -> SFix (gp p) (f, returnTy ((x',ty2sty xty):binds) fty) ((x',ty2sty xty):binds) t'
+        t'              -> SFix (gp p) (f, returnTy [(x',ty2sty xty)] fty) [(x',ty2sty xty)] t'
 openAll gp ns (IfZ p c t e) = SIfZ (gp p) (openAll gp ns c) (openAll gp ns t) (openAll gp ns e)
 openAll gp ns (Print p str t) = SPrint (gp p) str (openAll gp ns t)
 openAll gp ns (BinaryOp p op t u) = SBinaryOp (gp p) op (openAll gp ns t) (openAll gp ns u)
-openAll gp ns (Let p v ty m n) = 
-    let v'= freshen ns v 
-    in  SLetVar (gp p) (v',ty2sty ty) (openAll gp ns m) (openAll gp (v':ns) (open v' n))
+openAll gp ns (Let p v ty def body) = 
+  let v' = freshen ns v 
+      body' = openAll gp (v':ns) (open v' body)
+  in  case openAll gp ns def of
+        SLam _ binds def'   -> SLetLam (gp p) binds (v', returnTy binds ty) def' body'
+        SFix _ _ binds def' -> SLetFix (gp p) binds (v', returnTy binds ty) def' body'
+        t -> SLetVar (gp p) (v', ty2sty ty) t body'
 
+-- (openAll gp (v':ns) (open v' n))
+-- | Convierte un tipo a su representación azucarada
 ty2sty :: Ty -> STy
 ty2sty NatTy = SNatTy
 ty2sty (FunTy t t') = SFun (ty2sty t) (ty2sty t')
+ty2sty (Syn name _) = SSyn name
 
 --Colores
 constColor :: Doc AnsiStyle -> Doc AnsiStyle
@@ -117,14 +131,15 @@ ppName = id
 -- | Pretty printer para tipos (Doc)
 sty2doc :: STy -> Doc AnsiStyle
 sty2doc SNatTy = typeColor (pretty "Nat")
-sty2doc (Syn var) = typeColor (pretty var)
+sty2doc (SSyn var) = typeColor (pretty var)
 sty2doc (SFun x@(SFun _ _) y) = sep [parens (sty2doc x), typeOpColor (pretty "->"),sty2doc y]
 sty2doc (SFun x y) = sep [sty2doc x, typeOpColor (pretty "->"),sty2doc y] 
 
 ty2doc :: Ty -> Doc AnsiStyle
 ty2doc NatTy = typeColor (pretty "Nat")
 ty2doc (FunTy x@(FunTy _ _) y) = sep [parens (ty2doc x), typeOpColor (pretty "->"),ty2doc y]
-ty2doc (FunTy x y) = sep [ty2doc x, typeOpColor (pretty "->"),ty2doc y] 
+ty2doc (FunTy x y) = sep [ty2doc x, typeOpColor (pretty "->"),ty2doc y]
+ty2doc (Syn name _) = typeColor (pretty name)
 
 -- | Pretty printer para tipos (String)
 ppTy :: Ty -> String
@@ -166,49 +181,52 @@ t2doc at (SLam p binds t) =
       ]
 
 t2doc at t@(SApp _ _ _) =
-  let (h, ts) = collectApp t in
-  parenIf at $
-  t2doc True h <+> sep (map (t2doc True) ts)
+  let (h, ts) = collectApp t 
+  in  parenIf at $ 
+      t2doc True h <+> sep (map (t2doc True) ts)
 
-t2doc at (SFix _ (f,fty) (x,xty) binds m) = -- Wip
+t2doc at (SFix _ (f,fty) binds m) = -- Wip
   parenIf at $
   sep [ sep [ keywordColor (pretty "fix")
-            , bindings2doc ((f, fty):(x,xty):binds)
+            , bindings2doc ((f, fty):binds)
             , opColor (pretty "->") ]
       , nest 2 (t2doc False m)
       ]
 
 t2doc at (SIfZ _ c t e) =
   parenIf at $
-  sep [ keywordColor (pretty "ifz"), nest 2 (t2doc False c)
-      , keywordColor (pretty "then"), nest 2 (t2doc False t)
-      , keywordColor (pretty "else"), nest 2 (t2doc False e) 
+  sep [ sep [keywordColor (pretty "ifz"), nest 2 (t2doc False c)]
+      , sep [keywordColor (pretty "then"), nest 2 (t2doc False t)]
+      , sep [keywordColor (pretty "else"), nest 2 (t2doc False e)]
       ]
 
 t2doc at (SPrint _ str t) =
   parenIf at $
   sep [keywordColor (pretty "print"), pretty (show str), t2doc True t]
 
-t2doc at (SLetLam _ binds (v,ty) t t') = -- Wip
+t2doc at (SLetLam _ binds (v,sty) t t') =
   parenIf at $
   sep [
     sep [ keywordColor (pretty "let")
         , names2doc [v]
         , bindings2doc binds
-        , sty2doc ty
-        , opColor (pretty "=") ]
+        , pretty ":"
+        , sty2doc sty
+        , opColor (pretty "=")
+        ]
     , nest 2 (t2doc False t)
     , keywordColor (pretty "in")
     , nest 2 (t2doc False t') 
     ]
-t2doc at (SLetFix _ binds (v,ty) t t') = -- Wip
+
+t2doc at (SLetFix _ binds (v,sty) t t') =
   parenIf at $
   sep [
-    sep [ keywordColor (pretty "let")
-        , keywordColor (pretty "rec")
+    sep [ keywordColor (pretty "let rec")
         , names2doc [v]
         , bindings2doc binds
-        , sty2doc ty
+        , pretty ":"
+        , sty2doc sty
         , opColor (pretty "=") ]
     , nest 2 (t2doc False t)
     , keywordColor (pretty "in")
@@ -219,7 +237,9 @@ t2doc at (SLetVar _ (v,ty) t t') =
   parenIf at $
   sep [
     sep [ keywordColor (pretty "let")
-        , bindings2doc [(v,ty)]
+        , names2doc [v] 
+        , pretty ":"
+        , sty2doc ty
         , opColor (pretty "=") ]
   , nest 2 (t2doc False t)
   , keywordColor (pretty "in")
@@ -230,12 +250,17 @@ t2doc at (SBinaryOp _ o a b) =
   parenIf at $
   t2doc True a <+> binary2doc o <+> t2doc True b
 
+-- | Agrupa los binds con el mismo tipo
+-- y devuelve una lista de pares (nombres, tipo)
+-- donde nombres es una lista de nombres con el mismo tipo.
 joinBinds :: [(Name, STy)] -> [([Name], STy)]
 joinBinds = foldr f [] 
   where f (n, nty) [] = [([n], nty)]
         f (n, nty) ((ms, mty):xs) = if nty == mty then (n:ms, mty):xs
                                                   else ([n],nty):(ms, mty):xs
 
+-- | Imprime los binds de una lista de binds
+-- Admite multibinders
 bindings2doc :: [(Name, STy)] -> Doc AnsiStyle
 bindings2doc binds = sep prettyBinds
   where joinedBinds = joinBinds binds
@@ -255,16 +280,34 @@ render = unpack . renderStrict . layoutSmart defaultLayoutOptions
 ppDecl :: MonadFD4 m => Decl TTerm -> m String
 ppDecl (Decl p x t) = do 
   gdecl <- gets glb
-  return (render $ sep [defColor (pretty "let")
-                       , names2doc [x] 
-                       , pretty ":"
-                       , ty2doc (getTy t)
-                       , defColor (pretty "=")] 
-                   <+> nest 2 (t2doc False (openAll fst (map declName gdecl) t)))
+  case openAll' fst (map declName gdecl) t of
+    SLam _ binds t' -> 
+      return (render $ sep [ defColor (pretty "let")
+                           , names2doc [x]
+                           , bindings2doc binds
+                           , pretty ":"
+                           , sty2doc (returnTy binds (getTy t))
+                           , defColor (pretty "=")]
+                      <+> nest 2 (t2doc False t'))
+    SFix _ (_, sty) binds t' -> 
+      return (render $ sep [ defColor (pretty "let rec")
+                           , names2doc [x]
+                           , bindings2doc binds
+                           , pretty ":"
+                           , sty2doc sty
+                           , defColor (pretty "=")]
+                      <+> nest 2 (t2doc False t'))
+    t' -> return (render $ sep [defColor (pretty "let")
+                               , names2doc [x] 
+                               , pretty ":"
+                               , ty2doc (getTy t)
+                               , defColor (pretty "=")] 
+                           <+> nest 2 (t2doc False t'))
+    
 ppDecl (DeclTy p x t) = do 
   gdecl <- gets glb
   return (render $ sep [ defColor (pretty "type")
-                       , sty2doc (Syn x) 
+                       , sty2doc (SSyn x) 
                        , defColor (pretty "=")
                        , ty2doc t])
 
@@ -278,3 +321,13 @@ ppStats st = let Statistics { steps = s, ops = o, mem = m, clos = c } = st
                                  , pretty "Numero de clausuras:" <+> constColor (pretty (show c))
                                  ]
              in render statsDoc
+
+-- | Devuelve el tipo de retorno al aplicar una lista de binds
+-- a un tipo de función.
+returnTy :: [(Name, STy)] -> Ty -> STy
+returnTy [] ty = ty2sty ty
+returnTy ((_, sty):binds) (FunTy dom cod) = 
+  if ty2sty dom == sty 
+  then returnTy binds cod
+  else abort "Error de tipos en returnTy"
+returnTy _ _ = abort "Error de tipos en returnTy"
