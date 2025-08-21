@@ -69,7 +69,7 @@ import MonadFD4
 import TypeChecker ( tc, tcDecl )
 import CEK ( evalCEK )
 import Bytecompile ( runBC, bytecompileModule, bcWrite, bcRead )
-import Optimize ( optimizeDecl )
+import Optimize ( optimizeDecl, deadCodeGlobal )
 import System.FilePath ( dropExtension )
 import C (ir2C)
 import IR (IrDecls (IrDecls))
@@ -165,8 +165,7 @@ runVMFile f = do bc <- liftIO $ bcRead f
                  when p $ do stats <- getStats
                              printFD4 (ppStats stats)
 
--- | Procesa una declaración: la tipa, la optimiza si corresponde,
--- la agrega al entorno global y la retorna.
+-- | Procesa una declaración: la tipa, la optimiza si corresponde
 processDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
 processDecl d = do
   td <- typecheckDecl d
@@ -185,7 +184,9 @@ bytecompileFile :: MonadFD4 m => FilePath -> m ()
 bytecompileFile f = do
   decls <- loadFile f
   tds <- mapM processDecl decls
-  bc <- bytecompileModule tds
+  opt <- getOpt
+  od <- if opt then deadCodeGlobal tds else return tds
+  bc <- bytecompileModule od
   liftIO $ bcWrite bc (dropExtension f ++ ".bc")
 
 -- | Compila un archivo a código C.
@@ -193,21 +194,23 @@ ccompileFile :: MonadFD4 m => FilePath -> m ()
 ccompileFile f = do
   decls <- loadFile f
   tds <- mapM processDecl decls
-  c <- runCC tds
+  opt <- getOpt
+  od <- if opt then deadCodeGlobal tds else return tds
+  c <- runCC od
   liftIO $ writeFile (dropExtension f ++ ".c") (ir2C (IrDecls c))
 
 compileFile ::  MonadFD4 m => FilePath -> m ()
 compileFile f = do
-    i <- getInter
-    setInter False
-    when i $ printFD4 ("Abriendo "++f++"...")
-    decls <- loadFile f
-    mapM_ handleDecl decls
-    prof <- getProf
-    when prof (do stats <- getStats
-                  printFD4 (ppStats stats)
-                  resetStats)
-    setInter i
+  i <- getInter
+  setInter False
+  when i $ printFD4 ("Abriendo "++f++"...")
+  decls <- loadFile f
+  mapM_ handleDecl decls
+  prof <- getProf
+  when prof (do stats <- getStats
+                printFD4 (ppStats stats)
+                resetStats)
+  setInter i
 
 parseIO ::  MonadFD4 m => String -> P a -> String -> m a
 parseIO filename p x = case runP p x filename of

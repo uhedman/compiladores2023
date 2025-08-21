@@ -1,0 +1,1 @@
+let a : Nat = let f (x y : Nat) : Nat = x + 1 in 1

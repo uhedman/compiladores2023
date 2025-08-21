@@ -95,9 +95,9 @@ elab' env (SLetFix p [(x,xty)] (v,vty) def body) =
   elab' env $ SLetVar p (v, SFun xty vty) (SFix NoPos (v, SFun xty vty) [(x, xty)] def) body
 
 elab' env (SLetLam p ((x,xty):binds) (v,vty) def body) =
-  elab' env $ SLetVar p (v, types ((x,xty):binds) vty) def body
+  elab' env $ SLetVar p (v, types ((x,xty):binds) vty) (SLam NoPos ((x,xty):binds) def) body
 elab' env (SLetFix p ((x,xty):binds) (v,vty) def body) = 
-  elab' env (SLetFix p [(x,xty)] (v, types ((x,xty):binds) vty) (SLam NoPos binds def) body)
+  elab' env $ SLetVar p (v, types ((x,xty):binds) vty) (SFix NoPos (v, types ((x,xty):binds) vty) ((x,xty):binds) def) body
 
 elabDecl :: MonadFD4 m => SDecl STerm -> m (Decl Term)
 elabDecl (SDeclTy p n ty) = 
