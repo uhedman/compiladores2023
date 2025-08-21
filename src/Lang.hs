@@ -88,6 +88,7 @@ data BinaryOp = Add | Sub
 data Decl a = 
     Decl { declPos  :: Pos
          , declName :: Name
+         , declTy :: Ty
          , declBody :: a
          }
   | DeclTy { declPos  :: Pos

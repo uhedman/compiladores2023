@@ -226,8 +226,8 @@ glob2free t = t
 -- las declaraciones con Let.
 translate :: [Decl TTerm] -> TTerm
 translate [] = abort "Lista de declaraciones vacia"
-translate [Decl p _ b] = glob2free b
-translate (Decl p n b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n (translate ds))
+translate [Decl p _ _ b] = glob2free b
+translate (Decl p n _ b:ds) = Let (p, getTy b) n (getTy b) (glob2free b) (close n (translate ds))
 translate (DeclTy _ _ b:ds) = translate ds
 
 bytecompileModule :: MonadFD4 m => Module -> m Bytecode

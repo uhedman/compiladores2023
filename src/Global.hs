@@ -9,7 +9,7 @@ Stability   : experimental
 -}
 module Global where
 
-import Lang ( getTy, Decl(DeclTy, Decl), Name, TTerm, Ty )
+import Lang ( Decl(DeclTy, Decl), Name, TTerm, Ty )
 
 data GlEnv = GlEnv {
   inter :: Bool,        --  ^ True, si estamos en modo interactivo.
@@ -36,7 +36,7 @@ initStats = Statistics 0 0 0 0
 -- ^ Entorno de tipado de declaraciones globales
 tyEnv :: GlEnv ->  [(Name,Ty)]
 tyEnv g = map f (glb g) ++ env g
-  where f (Decl _ n b) = (n, getTy b)
+  where f (Decl _ n ty b) = (n, ty)
         f (DeclTy _ n ty) = (n, ty)
 
 {-

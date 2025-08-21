@@ -100,20 +100,21 @@ elab' env (SLetFix p ((x,xty):binds) (v,vty) def body) =
   elab' env $ SLetVar p (v, types ((x,xty):binds) vty) (SFix NoPos (v, types ((x,xty):binds) vty) ((x,xty):binds) def) body
 
 elabDecl :: MonadFD4 m => SDecl STerm -> m (Decl Term)
-elabDecl (SDeclTy p n ty) = 
-  do ty' <- sty2ty ty
-     return $ DeclTy p n ty'
-elabDecl (SDeclVar p n ty body) = 
+elabDecl (SDeclTy p n sty) = 
+  do ty <- sty2ty sty
+     return $ DeclTy p n ty
+elabDecl (SDeclVar p n sty body) = 
   do body' <- elab body
-     return $ Decl p n body'
-elabDecl (SDeclLam p n [] ty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
-elabDecl (SDeclFix p n [] ty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
-elabDecl (SDeclLam p n args ty body) = 
-  elabDecl $ SDeclVar p n (types args ty) (SLam NoPos args body)
-elabDecl (SDeclFix p n [(x, xty)] ty body) = 
-  elabDecl $ SDeclVar p n (SFun xty ty) (SFix NoPos (n, SFun xty ty) [(x, xty)] body)
-elabDecl (SDeclFix p n args ty body) = 
-  elabDecl $ SDeclFix p n [head args] (types (tail args) ty) (SLam NoPos (tail args) body)
+     ty <- sty2ty sty
+     return $ Decl p n ty body'
+elabDecl (SDeclLam p n [] sty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
+elabDecl (SDeclFix p n [] sty body) = failPosFD4 p "Declaracion de funcion sin argumentos"
+elabDecl (SDeclLam p n args sty body) = 
+  elabDecl $ SDeclVar p n (types args sty) (SLam NoPos args body)
+elabDecl (SDeclFix p n [(x, xty)] sty body) = 
+  elabDecl $ SDeclVar p n (SFun xty sty) (SFix NoPos (n, SFun xty sty) [(x, xty)] body)
+elabDecl (SDeclFix p n args sty body) = 
+  elabDecl $ SDeclFix p n [head args] (types (tail args) sty) (SLam NoPos (tail args) body)
 
 -- Funciones auxiliares
 

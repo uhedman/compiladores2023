@@ -278,7 +278,7 @@ render = unpack . renderStrict . layoutSmart defaultLayoutOptions
 
 -- | Pretty printing de declaraciones
 ppDecl :: MonadFD4 m => Decl TTerm -> m String
-ppDecl (Decl p x t) = do 
+ppDecl (Decl p x ty t) = do 
   gdecl <- gets glb
   case openAll' fst (map declName gdecl) t of
     SLam _ binds t' -> 
@@ -286,15 +286,15 @@ ppDecl (Decl p x t) = do
                            , names2doc [x]
                            , bindings2doc binds
                            , pretty ":"
-                           , sty2doc (returnTy binds (getTy t))
+                           , ty2doc ty
                            , defColor (pretty "=")]
                       <+> nest 2 (t2doc False t'))
-    SFix _ (_, sty) binds t' -> 
+    SFix _ _ binds t' -> 
       return (render $ sep [ defColor (pretty "let rec")
                            , names2doc [x]
                            , bindings2doc binds
                            , pretty ":"
-                           , sty2doc sty
+                           , ty2doc ty
                            , defColor (pretty "=")]
                       <+> nest 2 (t2doc False t'))
     t' -> return (render $ sep [defColor (pretty "let")

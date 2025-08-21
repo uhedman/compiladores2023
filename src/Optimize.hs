@@ -18,17 +18,17 @@ import Control.Monad.Extra ( (||^) )
 import PPrint (ppName)
 import Common ( Pos(NoPos), abort )
 
-loop :: MonadFD4 m => Int -> TTerm -> m TTerm
-loop n e = do
-  if n == 0 
-  then return e
-  else do (b, e') <- optimizeTerm e
-          if b then loop (n-1) e' else return e' 
-
 optimizeDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
-optimizeDecl (Decl p x t) = 
+optimizeDecl (Decl p x ty t) = 
   do t' <- loop 50 t
-     return $ Decl p x t'
+     return $ Decl p x ty t'
+  where
+    loop :: MonadFD4 m => Int -> TTerm -> m TTerm
+    loop n e = do
+      if n == 0 
+      then return e
+      else do (b, e') <- optimizeTerm e
+              if b then loop (n-1) e' else return e' 
 optimizeDecl d@DeclTy {} = return d
 
 -- Constant folding
@@ -48,13 +48,12 @@ consFold (BinaryOp i op n m) =
      return (bl || br, BinaryOp i op n' m')
 consFold t = return (False, t)
 
+-- | Elimina código muerto a nivel global
 deadCodeGlobal :: MonadFD4 m => [Decl TTerm] -> m [Decl TTerm]
 deadCodeGlobal [] = abort "Lista vacia de declaraciones"
 deadCodeGlobal [d] = return [d]
-deadCodeGlobal (d@(Decl p x t) : ds) = do
-  -- 1. primero limpiar el resto
+deadCodeGlobal (d@(Decl p x _ t) : ds) = do
   ds' <- deadCodeGlobal ds
-  -- 2. ahora preguntar si x aparece en ds'
   used <- or <$> mapM (hasGlobalVar' x) ds'
   b <- hasPrint t
   if b || used
@@ -93,6 +92,10 @@ inlineExp l@(Let (p, ty) z zty lam@(Lam _ _ _ (Sc1 def)) (Sc1 body)) =
      else return (False, l)
   where 
     search :: Int -> TTerm -> (Bool, TTerm)
+    search n v@(V _ (Bound m)) =
+      if m == n 
+      then (True, lam)
+      else (False, v)
     search n v@V {} = (False, v)
     search n c@Const {} = (False, c)
     search n (Lam i v vty (Sc1 t)) =
@@ -220,7 +223,7 @@ hasPrint (Let _ _ _ def (Sc1 t)) = hasPrint def ||^ hasPrint t
 
 -- | Busca la variable global x en el término t
 hasGlobalVar' :: MonadFD4 m => Name -> Decl TTerm -> m Bool
-hasGlobalVar' x (Decl _ _ t) = hasGlobalVar x t
+hasGlobalVar' x (Decl _ _ _ t) = hasGlobalVar x t
 hasGlobalVar' _ DeclTy {} = return False
 
 hasGlobalVar :: MonadFD4 m => Name -> TTerm -> m Bool

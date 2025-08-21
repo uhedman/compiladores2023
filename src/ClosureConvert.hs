@@ -73,7 +73,7 @@ convert (Let _ _ ty def body)  =
      return $ IrLet xname (ty2ir ty) def' body'
 
 convertDecl :: Decl TTerm -> StateT Int (Writer [IrDecl]) Ir
-convertDecl (Decl _ x body) =
+convertDecl (Decl _ x _ body) =
   do b <- convert body
      tell [IrVal x IrInt b]
      return b

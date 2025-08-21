@@ -218,20 +218,22 @@ parseIO filename p x = case runP p x filename of
                   Right r -> return r
 
 evalDecl :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
-evalDecl (Decl p x e) =
+evalDecl (Decl p x ty e) =
   do e' <- eval e
-     return $ Decl p x e'
+     return $ Decl p x ty e'
 evalDecl d = return d
 
 evalDeclCek :: MonadFD4 m => Decl TTerm -> m (Decl TTerm)
-evalDeclCek (Decl p x e) =
+evalDeclCek (Decl p x ty e) =
   do e' <- evalCEK e
-     return $ Decl p x e'
+     return $ Decl p x ty e'
 evalDeclCek d = return d
 
 typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
 typecheckDecl decl =
-  do decl' <- elabDecl decl
+  do printFD4 ("Elaborando " ++ show decl)
+     decl' <- elabDecl decl
+     printFD4 ("Chequeando tipo de " ++ show decl')
      tcDecl decl'
 
 handleDecl ::  MonadFD4 m => SDecl STerm -> m ()
@@ -243,10 +245,10 @@ handleDecl d = do
               opt <- getOpt
               dd' <- if opt then optimizeDecl dd else return dd
               case dd' of
-                (Decl p x tt) -> do
+                (Decl p x ty tt) -> do
                   cek <- getCek
                   te <- if cek then evalCEK tt else eval tt
-                  addDecl (Decl p x te)
+                  addDecl (Decl p x ty te)
                   prof <- getProf
                   when prof (do stats <- getStats
                                 printFD4 (ppStats stats)
