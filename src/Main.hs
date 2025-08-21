@@ -231,9 +231,7 @@ evalDeclCek d = return d
 
 typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl TTerm)
 typecheckDecl decl =
-  do printFD4 ("Elaborando " ++ show decl)
-     decl' <- elabDecl decl
-     printFD4 ("Chequeando tipo de " ++ show decl')
+  do decl' <- elabDecl decl
      tcDecl decl'
 
 handleDecl ::  MonadFD4 m => SDecl STerm -> m ()
