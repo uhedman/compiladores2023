@@ -107,8 +107,9 @@ expect ty tt = let ty' = getTy tt
                     "Tipo esperado: " ++ ppTy ty
                     ++ "\npero se obtuvo: " ++ ppTy ty'
   where
-    realTy (Syn _ t') = realTy t'
-    realTy t          = t
+    realTy (Syn _ t')  = realTy t'
+    realTy (FunTy d c) = FunTy (realTy d) (realTy c)
+    realTy NatTy       = NatTy
 
 -- | 'domCod chequea que un tipo sea función
 -- | devuelve un par con el tipo del dominio y el codominio de la función
