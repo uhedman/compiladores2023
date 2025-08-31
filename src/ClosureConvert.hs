@@ -42,7 +42,7 @@ convert (App (_,ty) l r) =
   do funcIr <- convert l 
      argIr <- convert r 
      clos <- getFreshName
-     return $ IrLet clos IrClo funcIr (IrCall (IrAccess (IrVar clos) IrClo 0) [IrVar clos, argIr] IrInt)
+     return $ IrLet clos IrClo funcIr (IrCall (IrAccess (IrVar clos) IrClo 0) [IrVar clos, argIr] (ty2ir ty))
 convert (Print _ s t)  = 
   do t' <- convert t 
      var <- getFreshName
@@ -73,9 +73,9 @@ convert (Let _ _ ty def body)  =
      return $ IrLet xname (ty2ir ty) def' body'
 
 convertDecl :: Decl TTerm -> StateT Int (Writer [IrDecl]) Ir
-convertDecl (Decl _ x _ body) =
+convertDecl (Decl _ x ty body) =
   do b <- convert body
-     tell [IrVal x IrInt b]
+     tell [IrVal x (ty2ir ty) b]
      return b
 convertDecl DeclTy {} = abort "No se soportan sinonimos de tipo" 
 
@@ -91,5 +91,5 @@ getFreshName = do int <- get
 
 ty2ir :: Ty -> IrTy
 ty2ir NatTy = IrInt
-ty2ir FunTy {} = IrFunTy
+ty2ir FunTy {} = IrClo
 ty2ir (Syn _ t) = ty2ir t
